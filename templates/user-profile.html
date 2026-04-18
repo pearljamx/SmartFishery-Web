@@ -1,4 +1,5 @@
-{% extends "base.html" %} {% block title %}用户资料 - 智慧渔场管理系统{% endblock %} {% block extra_css %}
+{% extends "base.html" %} {% block title %}用户资料 - 智慧渔场管理系统{%
+endblock %} {% block extra_css %}
 <style>
   .profile-container {
     max-width: 600px;
@@ -260,9 +261,7 @@
         <span style="color: #f97316">管理员</span>
         {% elif role == 'user' %}
         <span style="color: #60a5fa">普通用户</span>
-        {% else %}
-        {{ role }}
-        {% endif %}
+        {% else %} {{ role }} {% endif %}
       </span>
     </div>
     <div class="info-row">
@@ -319,10 +318,7 @@
       <button class="btn-save" onclick="changePassword()">
         <i class="fas fa-save"></i> 修改密码
       </button>
-      <button
-        class="btn-cancel"
-        onclick="clearPasswordForm()"
-      >
+      <button class="btn-cancel" onclick="clearPasswordForm()">
         <i class="fas fa-times"></i> 清空
       </button>
     </div>
@@ -333,10 +329,7 @@
     <div class="card-title"><i class="fas fa-cog"></i> 账户操作</div>
 
     <div class="button-group" style="margin-top: 0">
-      <button
-        class="btn-logout"
-        onclick="logout()"
-      >
+      <button class="btn-logout" onclick="logout()">
         <i class="fas fa-sign-out-alt"></i> 退出登录
       </button>
     </div>
@@ -345,32 +338,32 @@
 
 <script>
   // 页面加载时获取用户信息
-  document.addEventListener('DOMContentLoaded', function() {
+  document.addEventListener("DOMContentLoaded", function () {
     loadUserInfo();
   });
 
   function loadUserInfo() {
     // 这是前端示例，实际可以从服务器加载更多信息
-    const createdAt = new Date().toLocaleDateString('zh-CN');
-    const lastLogin = new Date().toLocaleString('zh-CN');
+    const createdAt = new Date().toLocaleDateString("zh-CN");
+    const lastLogin = new Date().toLocaleString("zh-CN");
 
-    document.getElementById('createdAt').textContent = createdAt;
-    document.getElementById('lastLogin').textContent = lastLogin;
+    document.getElementById("createdAt").textContent = createdAt;
+    document.getElementById("lastLogin").textContent = lastLogin;
   }
 
   function checkPasswordStrength() {
-    const password = document.getElementById('newPassword').value;
-    const bar = document.getElementById('strengthBar');
-    const text = document.getElementById('strengthText');
+    const password = document.getElementById("newPassword").value;
+    const bar = document.getElementById("strengthBar");
+    const text = document.getElementById("strengthText");
 
     if (!password) {
-      bar.style.width = '0%';
-      text.textContent = '';
+      bar.style.width = "0%";
+      text.textContent = "";
       return;
     }
 
     let strength = 0;
-    let strengthText = '';
+    let strengthText = "";
 
     if (password.length >= 8) strength += 25;
     if (password.length >= 12) strength += 25;
@@ -380,87 +373,92 @@
     if (/[^a-zA-Z0-9]/.test(password)) strength += 10;
 
     if (strength < 50) {
-      bar.style.background = '#ef4444';
-      strengthText = '弱';
+      bar.style.background = "#ef4444";
+      strengthText = "弱";
     } else if (strength < 70) {
-      bar.style.background = '#f97316';
-      strengthText = '中等';
+      bar.style.background = "#f97316";
+      strengthText = "中等";
     } else if (strength < 90) {
-      bar.style.background = '#eab308';
-      strengthText = '较强';
+      bar.style.background = "#eab308";
+      strengthText = "较强";
     } else {
-      bar.style.background = '#10b981';
-      strengthText = '强';
+      bar.style.background = "#10b981";
+      strengthText = "强";
     }
 
-    bar.style.width = strength + '%';
+    bar.style.width = strength + "%";
     text.textContent = `密码强度: ${strengthText}`;
   }
 
   function clearPasswordForm() {
-    document.getElementById('currentPassword').value = '';
-    document.getElementById('newPassword').value = '';
-    document.getElementById('confirmPassword').value = '';
-    document.getElementById('strengthBar').style.width = '0%';
-    document.getElementById('strengthText').textContent = '';
+    document.getElementById("currentPassword").value = "";
+    document.getElementById("newPassword").value = "";
+    document.getElementById("confirmPassword").value = "";
+    document.getElementById("strengthBar").style.width = "0%";
+    document.getElementById("strengthText").textContent = "";
   }
 
   function changePassword() {
-    const currentPassword = document.getElementById('currentPassword').value;
-    const newPassword = document.getElementById('newPassword').value;
-    const confirmPassword = document.getElementById('confirmPassword').value;
+    const currentPassword = document.getElementById("currentPassword").value;
+    const newPassword = document.getElementById("newPassword").value;
+    const confirmPassword = document.getElementById("confirmPassword").value;
 
     // 验证
     if (!currentPassword || !newPassword || !confirmPassword) {
-      showAlert('请填写所有密码字段', 'warning');
+      showAlert("请填写所有密码字段", "warning");
       return;
     }
 
     if (newPassword !== confirmPassword) {
-      showAlert('新密码与确认密码不一致', 'danger');
+      showAlert("新密码与确认密码不一致", "danger");
       return;
     }
 
     if (newPassword.length < 6) {
-      showAlert('新密码长度至少为6个字符', 'warning');
+      showAlert("新密码长度至少为6个字符", "warning");
       return;
     }
 
     if (newPassword === currentPassword) {
-      showAlert('新密码不能与当前密码相同', 'warning');
+      showAlert("新密码不能与当前密码相同", "warning");
       return;
     }
 
     // 调用API
-    apiCall('/user/change-password', 'POST', {
-      current_password: currentPassword,
-      new_password: newPassword
-    }, {
-      successCallback: function(response) {
-        if (response.status === 'success') {
-          showAlert('密码修改成功，请重新登录', 'success');
-          clearPasswordForm();
-          setTimeout(() => {
-            window.location.href = '/logout';
-          }, 2000);
-        } else {
-          showAlert(response.message || '密码修改失败', 'danger');
-        }
+    apiCall(
+      "/user/change-password",
+      "POST",
+      {
+        current_password: currentPassword,
+        new_password: newPassword,
       },
-      errorCallback: function(error) {
-        showAlert('请求失败: ' + error, 'danger');
-      }
-    });
+      {
+        successCallback: function (response) {
+          if (response.status === "success") {
+            showAlert("密码修改成功，请重新登录", "success");
+            clearPasswordForm();
+            setTimeout(() => {
+              window.location.href = "/logout";
+            }, 2000);
+          } else {
+            showAlert(response.message || "密码修改失败", "danger");
+          }
+        },
+        errorCallback: function (error) {
+          showAlert("请求失败: " + error, "danger");
+        },
+      },
+    );
   }
 
   function logout() {
-    if (confirm('确定要退出登录吗？')) {
-      window.location.href = '/logout';
+    if (confirm("确定要退出登录吗？")) {
+      window.location.href = "/logout";
     }
   }
 
-  function showAlert(message, type = 'info') {
-    const alertDiv = document.getElementById('alertMessage');
+  function showAlert(message, type = "info") {
+    const alertDiv = document.getElementById("alertMessage");
     const alertClass = `alert alert-${type}`;
     alertDiv.innerHTML = `
       <div class="${alertClass}" role="alert">
@@ -472,7 +470,7 @@
     `;
 
     setTimeout(() => {
-      alertDiv.innerHTML = '';
+      alertDiv.innerHTML = "";
     }, 5000);
   }
 </script>

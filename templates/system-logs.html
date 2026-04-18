@@ -1,4 +1,5 @@
-{% extends "base.html" %} {% block title %}系统操作日志 - 智慧渔场管理系统{% endblock %} {% block extra_css %}
+{% extends "base.html" %} {% block title %}系统操作日志 - 智慧渔场管理系统{%
+endblock %} {% block extra_css %}
 <style>
   .filter-panel {
     background: rgba(0, 0, 0, 0.3);
@@ -344,23 +345,23 @@
   let currentPage = 1;
   const perPage = 50;
 
-  document.addEventListener('DOMContentLoaded', function() {
+  document.addEventListener("DOMContentLoaded", function () {
     loadLogs();
   });
 
   function loadLogs(page = 1) {
     currentPage = page;
-    apiCall('/system-logs?page=' + page + '&per_page=' + perPage, 'GET', null, {
-      successCallback: function(response) {
-        if (response.status === 'success') {
+    apiCall("/system-logs?page=" + page + "&per_page=" + perPage, "GET", null, {
+      successCallback: function (response) {
+        if (response.status === "success") {
           renderLogsTable(response.data);
           renderPagination(response.pagination);
           updateStats(response.data);
         }
       },
-      errorCallback: function(error) {
-        console.error('加载日志失败:', error);
-      }
+      errorCallback: function (error) {
+        console.error("加载日志失败:", error);
+      },
     });
   }
 
@@ -368,39 +369,40 @@
     const filters = {
       page: 1,
       per_page: perPage,
-      action: document.getElementById('filterAction').value || undefined,
-      resource_type: document.getElementById('filterResourceType').value || undefined,
-      username: document.getElementById('filterUsername').value || undefined,
-      start_date: document.getElementById('filterStartDate').value || undefined,
-      end_date: document.getElementById('filterEndDate').value || undefined
+      action: document.getElementById("filterAction").value || undefined,
+      resource_type:
+        document.getElementById("filterResourceType").value || undefined,
+      username: document.getElementById("filterUsername").value || undefined,
+      start_date: document.getElementById("filterStartDate").value || undefined,
+      end_date: document.getElementById("filterEndDate").value || undefined,
     };
 
-    apiCall('/system-logs/filter', 'POST', filters, {
-      successCallback: function(response) {
-        if (response.status === 'success') {
+    apiCall("/system-logs/filter", "POST", filters, {
+      successCallback: function (response) {
+        if (response.status === "success") {
           renderLogsTable(response.data);
           renderPagination(response.pagination);
           updateStats(response.data);
         }
       },
-      errorCallback: function(error) {
-        console.error('筛选失败:', error);
-      }
+      errorCallback: function (error) {
+        console.error("筛选失败:", error);
+      },
     });
   }
 
   function resetFilters() {
-    document.getElementById('filterAction').value = '';
-    document.getElementById('filterResourceType').value = '';
-    document.getElementById('filterUsername').value = '';
-    document.getElementById('filterStartDate').value = '';
-    document.getElementById('filterEndDate').value = '';
+    document.getElementById("filterAction").value = "";
+    document.getElementById("filterResourceType").value = "";
+    document.getElementById("filterUsername").value = "";
+    document.getElementById("filterStartDate").value = "";
+    document.getElementById("filterEndDate").value = "";
     loadLogs(1);
   }
 
   function renderLogsTable(logs) {
-    const tbody = document.getElementById('logsTableBody');
-    tbody.innerHTML = '';
+    const tbody = document.getElementById("logsTableBody");
+    tbody.innerHTML = "";
 
     if (logs.length === 0) {
       tbody.innerHTML =
@@ -408,39 +410,42 @@
       return;
     }
 
-    logs.forEach(log => {
-      const row = document.createElement('tr');
+    logs.forEach((log) => {
+      const row = document.createElement("tr");
       row.innerHTML = `
-        <td class="timestamp">${new Date(log.created_at).toLocaleString('zh-CN')}</td>
+        <td class="timestamp">${new Date(log.created_at).toLocaleString("zh-CN")}</td>
         <td>
           <span class="action-badge badge-${log.action}">
             ${getActionLabel(log.action)}
           </span>
         </td>
         <td>
-          <div>${log.resource_name || '-'}</div>
+          <div>${log.resource_name || "-"}</div>
           <div class="resource-type">${log.resource_type}</div>
         </td>
-        <td>${log.username || '系统'}</td>
+        <td>${log.username || "系统"}</td>
         <td>
-          <small>${log.details || '-'}</small>
+          <small>${log.details || "-"}</small>
         </td>
-        <td>${log.ip_address || '-'}</td>
+        <td>${log.ip_address || "-"}</td>
       `;
       tbody.appendChild(row);
     });
   }
 
   function renderPagination(pagination) {
-    const paginationDiv = document.getElementById('pagination');
-    paginationDiv.innerHTML = '';
+    const paginationDiv = document.getElementById("pagination");
+    paginationDiv.innerHTML = "";
 
     // 上一页
-    const prevBtn = document.createElement('button');
-    prevBtn.textContent = '上一页';
+    const prevBtn = document.createElement("button");
+    prevBtn.textContent = "上一页";
     prevBtn.disabled = pagination.page === 1;
     prevBtn.onclick = () => {
-      if (pagination.page > 1) applyFilters() && (currentPage = pagination.page - 1) && loadLogs(currentPage);
+      if (pagination.page > 1)
+        applyFilters() &&
+          (currentPage = pagination.page - 1) &&
+          loadLogs(currentPage);
     };
     paginationDiv.appendChild(prevBtn);
 
@@ -451,23 +456,23 @@
         i === pagination.pages ||
         (i >= pagination.page - 2 && i <= pagination.page + 2)
       ) {
-        const pageBtn = document.createElement('button');
+        const pageBtn = document.createElement("button");
         pageBtn.textContent = i;
-        pageBtn.className = i === pagination.page ? 'active' : '';
+        pageBtn.className = i === pagination.page ? "active" : "";
         pageBtn.onclick = () => {
           loadLogs(i);
         };
         paginationDiv.appendChild(pageBtn);
       } else if (i === 2 || i === pagination.pages - 1) {
-        const ellipsis = document.createElement('span');
-        ellipsis.textContent = '...';
+        const ellipsis = document.createElement("span");
+        ellipsis.textContent = "...";
         paginationDiv.appendChild(ellipsis);
       }
     }
 
     // 下一页
-    const nextBtn = document.createElement('button');
-    nextBtn.textContent = '下一页';
+    const nextBtn = document.createElement("button");
+    nextBtn.textContent = "下一页";
     nextBtn.disabled = pagination.page === pagination.pages;
     nextBtn.onclick = () => {
       if (pagination.page < pagination.pages) loadLogs(pagination.page + 1);
@@ -481,24 +486,24 @@
     let updateCount = 0;
     let deleteCount = 0;
 
-    logs.forEach(log => {
+    logs.forEach((log) => {
       if (new Date(log.created_at).toDateString() === today) todayCount++;
-      if (log.action === 'update') updateCount++;
-      if (log.action === 'delete') deleteCount++;
+      if (log.action === "update") updateCount++;
+      if (log.action === "delete") deleteCount++;
     });
 
-    document.getElementById('todayLogs').textContent = todayCount;
-    document.getElementById('updateLogs').textContent = updateCount;
-    document.getElementById('deleteLogs').textContent = deleteCount;
+    document.getElementById("todayLogs").textContent = todayCount;
+    document.getElementById("updateLogs").textContent = updateCount;
+    document.getElementById("deleteLogs").textContent = deleteCount;
   }
 
   function getActionLabel(action) {
     const labels = {
-      create: '新增',
-      update: '修改',
-      delete: '删除',
-      control: '控制',
-      login: '登录'
+      create: "新增",
+      update: "修改",
+      delete: "删除",
+      control: "控制",
+      login: "登录",
     };
     return labels[action] || action;
   }

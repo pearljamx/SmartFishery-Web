@@ -176,17 +176,17 @@ endblock %} {% block extra_css %}
   let thresholdData = {};
 
   // 页面加载时获取阈值
-  document.addEventListener('DOMContentLoaded', function() {
+  document.addEventListener("DOMContentLoaded", function () {
     loadThresholds();
   });
 
   function loadThresholds() {
-    apiCall('/thresholds', 'GET', null, {
-      successCallback: function(response) {
-        if (response.status === 'success') {
+    apiCall("/thresholds", "GET", null, {
+      successCallback: function (response) {
+        if (response.status === "success") {
           thresholdData = {};
-          const grid = document.getElementById('thresholdGrid');
-          grid.innerHTML = '';
+          const grid = document.getElementById("thresholdGrid");
+          grid.innerHTML = "";
 
           if (response.data.length === 0) {
             grid.innerHTML =
@@ -195,7 +195,7 @@ endblock %} {% block extra_css %}
           }
 
           let activeCount = 0;
-          response.data.forEach(threshold => {
+          response.data.forEach((threshold) => {
             thresholdData[threshold.id] = { ...threshold };
             if (threshold.is_active) activeCount++;
 
@@ -203,28 +203,28 @@ endblock %} {% block extra_css %}
             grid.appendChild(card);
           });
 
-          document.getElementById('activeThresholdCount').textContent =
+          document.getElementById("activeThresholdCount").textContent =
             activeCount;
         }
       },
-      errorCallback: function(error) {
-        console.error('加载阈值失败:', error);
-        document.getElementById('thresholdGrid').innerHTML =
+      errorCallback: function (error) {
+        console.error("加载阈值失败:", error);
+        document.getElementById("thresholdGrid").innerHTML =
           '<div style="grid-column: 1/-1; text-align: center; color: var(--text-danger);">加载失败</div>';
-      }
+      },
     });
   }
 
   function createThresholdCard(threshold) {
-    const card = document.createElement('div');
-    card.className = 'threshold-card';
+    const card = document.createElement("div");
+    card.className = "threshold-card";
     card.innerHTML = `
       <div class="threshold-header">
         <div>
           <div class="threshold-name">${threshold.parameter_name}</div>
-          <div class="threshold-unit">${threshold.unit || '-'}</div>
+          <div class="threshold-unit">${threshold.unit || "-"}</div>
         </div>
-        <input type="checkbox" ${threshold.is_active ? 'checked' : ''} 
+        <input type="checkbox" ${threshold.is_active ? "checked" : ""} 
                onchange="toggleThreshold(${threshold.id})" 
                title="启用/禁用此阈值" />
       </div>
@@ -233,14 +233,14 @@ endblock %} {% block extra_css %}
         <div class="form-group">
           <label>最小值</label>
           <input type="number" step="0.01" 
-                 value="${threshold.min_value || ''}" 
+                 value="${threshold.min_value || ""}" 
                  onchange="updateThresholdField(${threshold.id}, 'min_value', this.value)"
                  placeholder="下限" />
         </div>
         <div class="form-group">
           <label>最大值</label>
           <input type="number" step="0.01" 
-                 value="${threshold.max_value || ''}" 
+                 value="${threshold.max_value || ""}" 
                  onchange="updateThresholdField(${threshold.id}, 'max_value', this.value)"
                  placeholder="上限" />
         </div>
@@ -251,14 +251,14 @@ endblock %} {% block extra_css %}
           <label>告警级别</label>
           <select class="warning-level-select" 
                   onchange="updateThresholdField(${threshold.id}, 'warning_level', this.value)">
-            <option value="warning" ${threshold.warning_level === 'warning' ? 'selected' : ''}>普通告警</option>
-            <option value="critical" ${threshold.warning_level === 'critical' ? 'selected' : ''}>严重告警</option>
+            <option value="warning" ${threshold.warning_level === "warning" ? "selected" : ""}>普通告警</option>
+            <option value="critical" ${threshold.warning_level === "critical" ? "selected" : ""}>严重告警</option>
           </select>
         </div>
       </div>
 
       <div style="color: var(--text-secondary); font-size: 12px; margin-top: 10px;">
-        ${threshold.description || ''}
+        ${threshold.description || ""}
       </div>
 
       <div class="action-buttons">
@@ -277,8 +277,8 @@ endblock %} {% block extra_css %}
 
   function toggleThreshold(thresholdId) {
     if (!thresholdData[thresholdId]) return;
-    thresholdData[thresholdId].is_active = !thresholdData[thresholdId]
-      .is_active;
+    thresholdData[thresholdId].is_active =
+      !thresholdData[thresholdId].is_active;
   }
 
   function saveThreshold(thresholdId) {
@@ -289,44 +289,42 @@ endblock %} {% block extra_css %}
     const minVal = parseFloat(threshold.min_value);
     const maxVal = parseFloat(threshold.max_value);
 
-    if (
-      !isNaN(minVal) &&
-      !isNaN(maxVal) &&
-      minVal >= maxVal
-    ) {
-      showToast('最小值不能大于等于最大值', 'warning');
+    if (!isNaN(minVal) && !isNaN(maxVal) && minVal >= maxVal) {
+      showToast("最小值不能大于等于最大值", "warning");
       return;
     }
 
     const data = {
       id: thresholdId,
-      min_value: threshold.min_value === '' ? null : parseFloat(threshold.min_value),
-      max_value: threshold.max_value === '' ? null : parseFloat(threshold.max_value),
+      min_value:
+        threshold.min_value === "" ? null : parseFloat(threshold.min_value),
+      max_value:
+        threshold.max_value === "" ? null : parseFloat(threshold.max_value),
       warning_level: threshold.warning_level,
-      is_active: threshold.is_active
+      is_active: threshold.is_active,
     };
 
-    apiCall('/thresholds/update', 'POST', data, {
-      successCallback: function(response) {
-        if (response.status === 'success') {
-          showToast('阈值保存成功', 'success');
+    apiCall("/thresholds/update", "POST", data, {
+      successCallback: function (response) {
+        if (response.status === "success") {
+          showToast("阈值保存成功", "success");
           loadThresholds();
         } else {
-          showToast(response.message || '保存失败', 'danger');
+          showToast(response.message || "保存失败", "danger");
         }
       },
-      errorCallback: function(error) {
-        showToast('请求失败: ' + error, 'danger');
-      }
+      errorCallback: function (error) {
+        showToast("请求失败: " + error, "danger");
+      },
     });
   }
 
-  function showToast(message, type = 'info') {
+  function showToast(message, type = "info") {
     const typeMap = {
-      success: 'success',
-      danger: 'danger',
-      warning: 'warning',
-      info: 'info'
+      success: "success",
+      danger: "danger",
+      warning: "warning",
+      info: "info",
     };
 
     const alertClass = `alert alert-${typeMap[type] || type}`;
@@ -337,12 +335,12 @@ endblock %} {% block extra_css %}
           </button>
       </div>`;
 
-    const alertContainer = document.createElement('div');
+    const alertContainer = document.createElement("div");
     alertContainer.innerHTML = alertHtml;
     document.body.appendChild(alertContainer.firstChild);
 
     setTimeout(() => {
-      const toasts = document.querySelectorAll('.alert');
+      const toasts = document.querySelectorAll(".alert");
       if (toasts.length > 0) {
         toasts[toasts.length - 1].remove();
       }
