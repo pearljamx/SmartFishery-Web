@@ -291,14 +291,15 @@ endblock %} {% block extra_css %}
   <input
     type="text"
     class="form-control"
+    id="deviceSearch"
     placeholder="🔍 搜索设备..."
     style="flex: 1; max-width: 300px"
   />
-  <button class="filter-btn active">全部</button>
-  <button class="filter-btn">增氧机</button>
-  <button class="filter-btn">投喂机</button>
-  <button class="filter-btn">水泵</button>
-  <button class="btn btn-primary" style="margin-left: auto">
+  <button class="filter-btn active" onclick="filterDevicesByType('all')">全部</button>
+  <button class="filter-btn" onclick="filterDevicesByType('增氧机')">增氧机</button>
+  <button class="filter-btn" onclick="filterDevicesByType('投喂机')">投喂机</button>
+  <button class="filter-btn" onclick="filterDevicesByType('水泵')">水泵</button>
+  <button class="btn btn-primary" style="margin-left: auto" onclick="showAddDeviceModal()">
     <i class="fas fa-plus"></i> 添加设备
   </button>
 </div>
@@ -307,7 +308,7 @@ endblock %} {% block extra_css %}
 {% if devices %}
 <div class="device-grid">
   {% for device in devices %}
-  <div class="device-card">
+  <div class="device-card" data-device-type="{{ device.device_type }}" data-device-name="{{ device.device_name }}">
     <div class="device-card-header">
       <div style="display: flex; align-items: center; gap: 10px; flex: 1">
         <div class="device-icon">
@@ -374,6 +375,13 @@ endblock %} {% block extra_css %}
         onclick="showDeviceDetail({{ device.id }})"
       >
         <i class="fas fa-info-circle"></i>
+      </button>
+      <button
+        class="btn btn-secondary btn-sm"
+        onclick="viewDeviceLogs({{ device.id }})"
+        title="查看操作日志"
+      >
+        <i class="fas fa-history"></i>
       </button>
     </div>
   </div>
@@ -646,6 +654,10 @@ endblock %} {% block extra_css %}
     showToast(`设备 #${deviceId} 详情页面开发中...`, "info");
   }
 
+  function viewDeviceLogs(deviceId) {
+    window.location.href = `/device-logs/${deviceId}`;
+  }
+
   // 刷新设备列表
   function refreshDevices() {
     const btn = event.target.closest(".refresh-btn");
@@ -715,6 +727,125 @@ endblock %} {% block extra_css %}
     });
   }
 
+  // ============================================================
+  // 设备管理函数 (Task2)
+  // ============================================================
+
+  let currentDeviceFilter = 'all';
+
+  function filterDevicesByType(type) {
+    currentDeviceFilter = type;
+    
+    // 更新按钮状态
+    document.querySelectorAll('.filter-btn').forEach(btn => {
+      btn.classList.remove('active');
+    });
+    event.target.classList.add('active');
+    
+    // 过滤设备显示
+    filterAndDisplayDevices();
+  }
+
+  function filterAndDisplayDevices() {
+    const searchText = document.getElementById('deviceSearch').value.toLowerCase();
+    const deviceCards = document.querySelectorAll('.device-card');
+    let visibleCount = 0;
+
+    deviceCards.forEach(card => {
+      const deviceType = card.dataset.deviceType || '';
+      const deviceName = card.dataset.deviceName || '';
+      
+      let matches = true;
+      
+      // 检查类型过滤
+      if (currentDeviceFilter !== 'all' && deviceType !== currentDeviceFilter) {
+        matches = false;
+      }
+      
+      // 检查搜索过滤
+      if (searchText && !deviceName.toLowerCase().includes(searchText)) {
+        matches = false;
+      }
+      
+      if (matches) {
+        card.style.display = '';
+        visibleCount++;
+      } else {
+        card.style.display = 'none';
+      }
+    });
+
+    // 如果没有结果，显示提示
+    if (visibleCount === 0 && deviceCards.length > 0) {
+      const deviceGrid = document.querySelector('.device-grid');
+      if (!document.getElementById('noDevicesHint')) {
+        const hint = document.createElement('div');
+        hint.id = 'noDevicesHint';
+        hint.style.cssText = 'grid-column: 1/-1; text-align: center; padding: 40px; color: var(--text-secondary);';
+        hint.innerHTML = '<i class="fas fa-inbox" style="font-size: 3rem; margin-bottom: 20px;"></i><p>没有找到匹配的设备</p>';
+        deviceGrid.appendChild(hint);
+      }
+    } else {
+      const hint = document.getElementById('noDevicesHint');
+      if (hint) hint.remove();
+    }
+  }
+
+  function showAddDeviceModal() {
+    $("#addDeviceModal").modal("show");
+  }
+
+  function saveDevice() {
+    const formData = {
+      device_name: document.getElementById('newDeviceName').value,
+      device_type: document.getElementById('newDeviceType').value,
+      device_model: document.getElementById('newDeviceModel').value,
+      power_consumption: parseFloat(document.getElementById('newDevicePower').value) || 0,
+      pond_id: document.getElementById('newDevicePond').value
+    };
+
+    // 表单验证
+    if (!formData.device_name) {
+      showToast('请输入设备名称', 'warning');
+      return;
+    }
+    if (!formData.device_type) {
+      showToast('请选择设备类型', 'warning');
+      return;
+    }
+    if (!formData.pond_id) {
+      showToast('请选择所属鱼塘', 'warning');
+      return;
+    }
+
+    // 调用 API
+    apiCall('/api/devices/add', 'POST', formData, {
+      successCallback: function(response) {
+        if (response.status === 'success') {
+          showToast('设备添加成功', 'success');
+          $("#addDeviceModal").modal("hide");
+          setTimeout(() => {
+            location.reload();
+          }, 1000);
+        } else {
+          showToast(response.message || '添加失败', 'danger');
+        }
+      },
+      errorCallback: function(error) {
+        showToast('请求失败: ' + error, 'danger');
+      }
+    });
+  }
+
+  // 搜索设备的实时过滤
+  document.addEventListener('DOMContentLoaded', function() {
+    const searchInput = document.getElementById('deviceSearch');
+    if (searchInput) {
+      searchInput.addEventListener('input', filterAndDisplayDevices);
+    }
+    updateTimestamp();
+  });
+
   // 页面加载时更新时间戳
   document.addEventListener("DOMContentLoaded", function () {
     updateTimestamp();
@@ -723,4 +854,74 @@ endblock %} {% block extra_css %}
   // 定时更新时间戳
   setInterval(updateTimestamp, 1000);
 </script>
+
+<!-- Add Device Modal -->
+<div class="modal fade" id="addDeviceModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content" style="background: linear-gradient(135deg, #1e3a5f 0%, #0f1f35 100%); border: 2px solid var(--border-color);">
+      <div class="modal-header" style="border-bottom: 2px solid var(--border-color)">
+        <h5 class="modal-title">添加设备</h5>
+        <button type="button" class="close text-light" data-dismiss="modal">&times;</button>
+      </div>
+      <div class="modal-body">
+        <form id="addDeviceForm">
+          <div class="form-group">
+            <label>设备名称 <span class="text-danger">*</span></label>
+            <input type="text" class="form-control" id="newDeviceName" placeholder="如：增氧机1号" required />
+          </div>
+          <div class="form-group">
+            <label>设备类型 <span class="text-danger">*</span></label>
+            <select class="form-control" id="newDeviceType" required>
+              <option value="">-- 请选择 --</option>
+              <option value="增氧机">增氧机</option>
+              <option value="投喂机">投喂机</option>
+              <option value="水泵">水泵</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>设备型号</label>
+            <input type="text" class="form-control" id="newDeviceModel" placeholder="如：XYZ-2000" />
+          </div>
+          <div class="form-group">
+            <label>额定功率(W)</label>
+            <input type="number" step="0.1" class="form-control" id="newDevicePower" placeholder="如：500" />
+          </div>
+          <div class="form-group">
+            <label>所属鱼塘 <span class="text-danger">*</span></label>
+            <select class="form-control" id="newDevicePond" required>
+              <option value="">-- 加载中 --</option>
+            </select>
+          </div>
+        </form>
+      </div>
+      <div class="modal-footer" style="border-top: 2px solid var(--border-color)">
+        <button type="button" class="btn btn-secondary" data-dismiss="modal">取消</button>
+        <button type="button" class="btn btn-primary" onclick="saveDevice()">保存</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  // 加载鱼塘列表到下拉菜单
+  document.addEventListener('DOMContentLoaded', function() {
+    const pondSelect = document.getElementById('newDevicePond');
+    if (pondSelect) {
+      apiCall('/ponds', 'GET', null, {
+        successCallback: function(response) {
+          if (response.status === 'success') {
+            pondSelect.innerHTML = '<option value="">-- 请选择 --</option>';
+            response.data.forEach(pond => {
+              const option = document.createElement('option');
+              option.value = pond.id;
+              option.textContent = pond.pond_name;
+              pondSelect.appendChild(option);
+            });
+          }
+        }
+      });
+    }
+  });
+</script>
+
 {% endblock %}

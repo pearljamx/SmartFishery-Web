@@ -60,6 +60,50 @@ app.config['JSON_AS_ASCII'] = False
 db = SQLAlchemy(app)
 
 # ============================================================
+# 登录安全配置
+# ============================================================
+
+# 登录尝试跟踪字典 {username: {'attempts': count, 'locked_until': timestamp}}
+login_attempts = {}
+MAX_LOGIN_ATTEMPTS = 5
+LOCKOUT_DURATION = 600  # 秒（10分钟）
+
+
+def is_account_locked(username):
+    """检查账户是否被锁定"""
+    if username not in login_attempts:
+        return False
+    
+    attempt_data = login_attempts[username]
+    if attempt_data['attempts'] < MAX_LOGIN_ATTEMPTS:
+        return False
+    
+    # 检查锁定是否过期
+    if datetime.utcnow() > attempt_data['locked_until']:
+        login_attempts[username]['attempts'] = 0
+        return False
+    
+    return True
+
+
+def record_failed_attempt(username):
+    """记录失败的登录尝试"""
+    if username not in login_attempts:
+        login_attempts[username] = {'attempts': 0, 'locked_until': None}
+    
+    login_attempts[username]['attempts'] += 1
+    if login_attempts[username]['attempts'] >= MAX_LOGIN_ATTEMPTS:
+        login_attempts[username]['locked_until'] = datetime.utcnow() + timedelta(seconds=LOCKOUT_DURATION)
+
+
+def clear_login_attempts(username):
+    """清除登录尝试计数"""
+    if username in login_attempts:
+        login_attempts[username]['attempts'] = 0
+        login_attempts[username]['locked_until'] = None
+
+
+# ============================================================
 # 数据库模型
 # ============================================================
 
@@ -339,6 +383,69 @@ class OrderItem(db.Model):
         }
 
 
+class WaterQualityThreshold(db.Model):
+    """水质告警阈值配置 (Task3)"""
+    __tablename__ = 'water_quality_thresholds'
+    id = db.Column(db.Integer, primary_key=True)
+    parameter_name = db.Column(db.String(50), nullable=False, unique=True)  # 温度、pH、溶氧等
+    parameter_key = db.Column(db.String(50), nullable=False)  # temperature, ph_value, dissolved_oxygen等
+    min_value = db.Column(db.Float)
+    max_value = db.Column(db.Float)
+    warning_level = db.Column(db.String(20), default='warning')  # warning, critical
+    unit = db.Column(db.String(20))
+    description = db.Column(db.String(255))
+    is_active = db.Column(db.Boolean, default=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'parameter_name': self.parameter_name,
+            'parameter_key': self.parameter_key,
+            'min_value': self.min_value,
+            'max_value': self.max_value,
+            'warning_level': self.warning_level,
+            'unit': self.unit,
+            'description': self.description,
+            'is_active': self.is_active,
+            'created_at': self.created_at.isoformat() if self.created_at else None
+        }
+
+
+class SystemLog(db.Model):
+    """系统操作审计日志 (Task4)"""
+    __tablename__ = 'system_logs'
+    id = db.Column(db.BigInteger, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id', ondelete='SET NULL'), nullable=True)
+    username = db.Column(db.String(100))
+    action = db.Column(db.String(50), nullable=False)  # create, update, delete, control, login
+    resource_type = db.Column(db.String(50), nullable=False)  # Pond, Device, SeedlingProduct等
+    resource_id = db.Column(db.Integer)
+    resource_name = db.Column(db.String(255))
+    old_value = db.Column(db.Text)
+    new_value = db.Column(db.Text)
+    ip_address = db.Column(db.String(50))
+    details = db.Column(db.Text)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, index=True)
+    
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'user_id': self.user_id,
+            'username': self.username,
+            'action': self.action,
+            'resource_type': self.resource_type,
+            'resource_id': self.resource_id,
+            'resource_name': self.resource_name,
+            'old_value': self.old_value,
+            'new_value': self.new_value,
+            'ip_address': self.ip_address,
+            'details': self.details,
+            'created_at': self.created_at.isoformat() if self.created_at else None
+        }
+
+
 # ============================================================
 # 硬件数据采集初始化
 # ============================================================
@@ -509,19 +616,37 @@ def login_page():
         password = request.form.get('password')
         identity = request.form.get('identity', 'admin')  # 获取选择的身份
         
+        # 检查账户是否被锁定
+        if is_account_locked(username):
+            remaining_time = int((login_attempts[username]['locked_until'] - datetime.utcnow()).total_seconds())
+            error_msg = f'账户已被锁定，请在{remaining_time}秒后再试'
+            return render_template('login.html', error=error_msg)
+        
         user = User.query.filter_by(username=username).first()
         # 简单密码验证（生产环境应使用哈希）
         if user and user.password_hash == password:
             # 验证选择的身份是否与用户角色匹配
             if identity == 'admin' and user.role != 'admin':
+                record_failed_attempt(username)
                 return render_template('login.html', error='该账号不是管理员账号，请选择"鱼苗供应商"身份')
             elif identity == 'supplier' and user.role != 'supplier':
+                record_failed_attempt(username)
                 return render_template('login.html', error='该账号不是供应商账号，请选择"渔场管理员"身份')
+            
+            # 清除登录尝试计数
+            clear_login_attempts(username)
+            
+            # 更新最后登录时间
+            user.last_login = datetime.utcnow()
+            db.session.commit()
             
             session['user_id'] = user.id
             session['username'] = user.username
             session['role'] = user.role
             session['supplier_id'] = user.supplier_id
+            
+            # 记录登录日志
+            record_audit_log('login', 'User', user.id, details=f'用户{username}登录')
             
             # 根据角色重定向到不同的仪表板
             if user.role == 'admin':
@@ -531,7 +656,13 @@ def login_page():
             else:
                 return redirect(url_for('index'))
         else:
-            return render_template('login.html', error='用户名或密码错误')
+            record_failed_attempt(username)
+            attempts_remaining = MAX_LOGIN_ATTEMPTS - login_attempts.get(username, {}).get('attempts', 0)
+            if attempts_remaining > 0:
+                error_msg = f'用户名或密码错误 (还有{attempts_remaining}次尝试机会)'
+            else:
+                error_msg = '登录尝试过多，账户已被锁定'
+            return render_template('login.html', error=error_msg)
     
     return render_template('login.html')
 
@@ -558,8 +689,13 @@ def index():
         devices_list = Device.query.all()
         devices = [{'device_name': d.device_name, 'device_type': d.device_type, 'status': d.status} for d in devices_list]
         
-        # 从数据库获取最新的水质数据
-        latest_sensor = SensorData.query.order_by(SensorData.recorded_at.desc()).first()
+        # 从数据库获取第一个鱼池的最新水质数据
+        first_pond = Pond.query.first()
+        if first_pond:
+            latest_sensor = SensorData.query.filter_by(pond_id=first_pond.id).order_by(SensorData.recorded_at.desc()).first()
+        else:
+            latest_sensor = None
+            
         if latest_sensor:
             water_quality_data = {
                 'values': [
@@ -580,8 +716,12 @@ def index():
             'running': running_devices
         }
         
-        # 从数据库获取最近12条传感器数据（如果有的话）
-        recent_sensors = SensorData.query.order_by(SensorData.recorded_at.desc()).limit(12).all()
+        # 从数据库获取第一个鱼池的最近12条传感器数据（如果有的话）
+        recent_sensors = []
+        first_pond = Pond.query.first()
+        if first_pond:
+            recent_sensors = SensorData.query.filter_by(pond_id=first_pond.id).order_by(SensorData.recorded_at.desc()).limit(12).all()
+        
         if recent_sensors:
             recent_sensors.reverse()
             recent_data = {
@@ -681,23 +821,28 @@ def dashboard_refresh():
         online_devices = Device.query.filter_by(status='在线').count()
         running_devices = Device.query.filter_by(status='运行中').count()
         
-        # 获取最新水质数据
-        latest_sensor = SensorData.query.order_by(SensorData.recorded_at.desc()).first()
+        # 获取第一个鱼池的最新水质数据
+        first_pond = Pond.query.first()
         water_quality = None
-        if latest_sensor:
-            water_quality = {
-                'temperature': latest_sensor.temperature or 0,
-                'ph_value': latest_sensor.ph_value or 0,
-                'dissolved_oxygen': latest_sensor.dissolved_oxygen or 0,
-                'salinity': latest_sensor.salinity or 0
-            }
+        if first_pond:
+            latest_sensor = SensorData.query.filter_by(pond_id=first_pond.id).order_by(SensorData.recorded_at.desc()).first()
+            if latest_sensor:
+                water_quality = {
+                    'temperature': latest_sensor.temperature or 0,
+                    'ph_value': latest_sensor.ph_value or 0,
+                    'dissolved_oxygen': latest_sensor.dissolved_oxygen or 0,
+                    'salinity': latest_sensor.salinity or 0
+                }
         
         # 获取最新的设备列表
         devices_list = Device.query.limit(8).all()
         devices = [{'device_name': d.device_name, 'device_type': d.device_type, 'status': d.status} for d in devices_list]
         
-        # 获取最近12条传感器数据
-        recent_sensors = SensorData.query.order_by(SensorData.recorded_at.desc()).limit(12).all()
+        # 获取第一个鱼池的最近12条传感器数据
+        recent_sensors = []
+        if first_pond:
+            recent_sensors = SensorData.query.filter_by(pond_id=first_pond.id).order_by(SensorData.recorded_at.desc()).limit(12).all()
+        
         recent_data = {
             'temperature': [s.temperature or 0 for s in reversed(recent_sensors)],
             'oxygen': [s.dissolved_oxygen or 0 for s in reversed(recent_sensors)]
@@ -716,6 +861,82 @@ def dashboard_refresh():
                 'devices': devices,
                 'recent_data': recent_data
             }
+        }), 200
+    except Exception as e:
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+
+
+@app.route('/api/water-quality/all-ponds', methods=['GET'])
+@api_login_required
+def water_quality_all_ponds():
+    """获取所有鱼池的水质数据汇总"""
+    try:
+        ponds = Pond.query.all()
+        
+        # 获取每个鱼池的最新水质数据
+        pond_data_list = []
+        temp_values = []
+        ph_values = []
+        oxygen_values = []
+        abnormal_count = 0
+        
+        for pond in ponds:
+            latest = SensorData.query.filter_by(pond_id=pond.id).order_by(SensorData.recorded_at.desc()).first()
+            if latest:
+                temp = latest.temperature or 0
+                ph = latest.ph_value or 0
+                oxygen = latest.dissolved_oxygen or 0
+                salinity = latest.salinity or 0
+                
+                # 收集数据用于计算平均值
+                if temp > 0:
+                    temp_values.append(temp)
+                if ph > 0:
+                    ph_values.append(ph)
+                if oxygen > 0:
+                    oxygen_values.append(oxygen)
+                
+                # 判断状态
+                status = 'normal'
+                if temp < 20 or temp > 35:
+                    status = 'warning'
+                if ph < 6.0 or ph > 8.5:
+                    status = 'warning'
+                if oxygen < 5:
+                    status = 'danger'
+                    abnormal_count += 1
+                
+                pond_data_list.append({
+                    'pond_id': pond.id,
+                    'pond_name': pond.pond_name,
+                    'fish_type': pond.fish_type or '未知',
+                    'fish_count': pond.fish_count or 0,
+                    'temperature': round(temp, 2),
+                    'ph_value': round(ph, 2),
+                    'dissolved_oxygen': round(oxygen, 2),
+                    'salinity': round(salinity, 2),
+                    'food_value': round(latest.food_value or 0, 2),
+                    'ammonia_nitrogen': round(latest.ammonia_nitrogen or 0, 2),
+                    'nitrite_nitrogen': round(latest.nitrite_nitrogen or 0, 2),
+                    'recorded_at': latest.recorded_at.strftime('%Y-%m-%d %H:%M:%S') if latest.recorded_at else '未知',
+                    'status': status
+                })
+        
+        # 计算平均值
+        avg_temperature = round(sum(temp_values) / len(temp_values), 2) if temp_values else 0
+        avg_ph_value = round(sum(ph_values) / len(ph_values), 2) if ph_values else 0
+        avg_dissolved_oxygen = round(sum(oxygen_values) / len(oxygen_values), 2) if oxygen_values else 0
+        
+        return jsonify({
+            'status': 'success',
+            'summary': {
+                'total_ponds': len(ponds),
+                'avg_temperature': avg_temperature,
+                'avg_ph_value': avg_ph_value,
+                'avg_dissolved_oxygen': avg_dissolved_oxygen,
+                'abnormal_count': abnormal_count
+            },
+            'ponds': pond_data_list
         }), 200
     except Exception as e:
         return jsonify({'status': 'error', 'message': str(e)}), 500
@@ -926,6 +1147,55 @@ def get_devices(pond_id):
             'current_page': page
         }), 200
     except Exception as e:
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+
+
+@app.route('/api/devices/add', methods=['POST'])
+@api_login_required
+def add_device():
+    """添加新设备 (Task2)"""
+    try:
+        if session.get('role') != 'admin':
+            return jsonify({'status': 'error', 'message': '仅管理员可添加设备'}), 403
+        
+        data = request.get_json()
+        
+        # 验证必要字段
+        if not data.get('device_name'):
+            return jsonify({'status': 'error', 'message': '设备名称不能为空'}), 400
+        if not data.get('device_type'):
+            return jsonify({'status': 'error', 'message': '设备类型不能为空'}), 400
+        if not data.get('pond_id'):
+            return jsonify({'status': 'error', 'message': '所属鱼塘不能为空'}), 400
+        
+        # 检查鱼塘是否存在
+        pond = Pond.query.get(data['pond_id'])
+        if not pond:
+            return jsonify({'status': 'error', 'message': '选择的鱼塘不存在'}), 404
+        
+        # 创建新设备
+        new_device = Device(
+            pond_id=data['pond_id'],
+            device_name=data['device_name'],
+            device_type=data['device_type'],
+            device_model=data.get('device_model', '标准型'),
+            status='离线',  # 新设备默认离线
+            power_consumption=float(data.get('power_consumption', 0)),
+            last_active=datetime.utcnow(),
+            created_at=datetime.utcnow(),
+            updated_at=datetime.utcnow()
+        )
+        
+        db.session.add(new_device)
+        db.session.commit()
+        
+        return jsonify({
+            'status': 'success',
+            'message': f'设备"{data["device_name"]}"添加成功',
+            'device_id': new_device.id
+        }), 201
+    except Exception as e:
+        db.session.rollback()
         return jsonify({'status': 'error', 'message': str(e)}), 500
 
 
@@ -1164,7 +1434,7 @@ def supplier_stats():
 
 @app.route('/seedling-management', methods=['GET'])
 @login_required
-def seedling_management():
+def seedling_management_page():
     """管理员鱼苗管理中心"""
     try:
         if session.get('role') != 'admin':
@@ -1175,6 +1445,668 @@ def seedling_management():
                                role=session.get('role'))
     except Exception as e:
         return render_template('error.html', message=str(e)), 500
+
+
+# ============================================================
+# 水质告警阈值配置 API (Task3)
+# ============================================================
+
+@app.route('/api/thresholds', methods=['GET'])
+@api_login_required
+def get_thresholds():
+    """获取所有水质告警阈值"""
+    try:
+        thresholds = WaterQualityThreshold.query.filter_by(is_active=True).all()
+        return jsonify({
+            'status': 'success',
+            'data': [t.to_dict() for t in thresholds]
+        }), 200
+    except Exception as e:
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+
+
+@app.route('/api/thresholds/update', methods=['POST'])
+@api_login_required
+def update_thresholds():
+    """更新水质告警阈值"""
+    try:
+        if session.get('role') != 'admin':
+            return jsonify({'status': 'error', 'message': '仅管理员可以修改阈值'}), 403
+        
+        data = request.get_json()
+        threshold_id = data.get('id')
+        
+        threshold = WaterQualityThreshold.query.get(threshold_id)
+        if not threshold:
+            return jsonify({'status': 'error', 'message': '阈值不存在'}), 404
+        
+        # 更新字段
+        if 'min_value' in data:
+            threshold.min_value = float(data['min_value']) if data['min_value'] is not None else None
+        if 'max_value' in data:
+            threshold.max_value = float(data['max_value']) if data['max_value'] is not None else None
+        if 'warning_level' in data:
+            threshold.warning_level = data['warning_level']
+        if 'is_active' in data:
+            threshold.is_active = data['is_active']
+        
+        threshold.updated_at = datetime.utcnow()
+        db.session.commit()
+        
+        return jsonify({
+            'status': 'success',
+            'message': '阈值更新成功',
+            'data': threshold.to_dict()
+        }), 200
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+
+
+@app.route('/water-quality-thresholds', methods=['GET'])
+@login_required
+def water_quality_thresholds():
+    """水质告警阈值配置页面"""
+    try:
+        if session.get('role') != 'admin':
+            return redirect(url_for('login_page'))
+        
+        return render_template('water-quality-thresholds.html',
+                               username=session.get('username'),
+                               role=session.get('role'))
+    except Exception as e:
+        return render_template('error.html', message=str(e)), 500
+
+
+# ============================================================
+# 系统操作日志与审计 API (Task4)
+# ============================================================
+
+def record_audit_log(action, resource_type, resource_id=None, resource_name=None, 
+                     old_value=None, new_value=None, details=None):
+    """记录系统操作审计日志"""
+    try:
+        user_id = session.get('user_id')
+        username = session.get('username')
+        ip_address = request.remote_addr
+        
+        log = SystemLog(
+            user_id=user_id,
+            username=username,
+            action=action,
+            resource_type=resource_type,
+            resource_id=resource_id,
+            resource_name=resource_name,
+            old_value=old_value,
+            new_value=new_value,
+            ip_address=ip_address,
+            details=details,
+            created_at=datetime.utcnow()
+        )
+        
+        db.session.add(log)
+        db.session.commit()
+    except Exception as e:
+        print(f"[WARN] 审计日志记录失败: {e}")
+        db.session.rollback()
+
+
+@app.route('/system-logs', methods=['GET'])
+@login_required
+def system_logs_page():
+    """系统操作日志页面"""
+    try:
+        if session.get('role') != 'admin':
+            return redirect(url_for('login_page'))
+        
+        return render_template('system-logs.html',
+                               username=session.get('username'),
+                               role=session.get('role'))
+    except Exception as e:
+        return render_template('error.html', message=str(e)), 500
+
+
+@app.route('/api/system-logs', methods=['GET'])
+@api_login_required
+def get_system_logs():
+    """获取系统操作日志"""
+    try:
+        if session.get('role') != 'admin':
+            return jsonify({'status': 'error', 'message': '仅管理员可以查看日志'}), 403
+        
+        page = request.args.get('page', 1, type=int)
+        per_page = request.args.get('per_page', 50, type=int)
+        
+        # 分页查询
+        query = SystemLog.query.order_by(SystemLog.created_at.desc())
+        total = query.count()
+        logs = query.paginate(page=page, per_page=per_page, error_out=False)
+        
+        return jsonify({
+            'status': 'success',
+            'data': [log.to_dict() for log in logs.items],
+            'pagination': {
+                'page': page,
+                'per_page': per_page,
+                'total': total,
+                'pages': logs.pages
+            }
+        }), 200
+    except Exception as e:
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+
+
+@app.route('/api/system-logs/filter', methods=['POST'])
+@api_login_required
+def filter_system_logs():
+    """筛选系统操作日志"""
+    try:
+        if session.get('role') != 'admin':
+            return jsonify({'status': 'error', 'message': '仅管理员可以查看日志'}), 403
+        
+        data = request.get_json()
+        page = data.get('page', 1)
+        per_page = data.get('per_page', 50)
+        
+        # 构建查询
+        query = SystemLog.query
+        
+        # 按操作类型筛选
+        if data.get('action'):
+            query = query.filter_by(action=data['action'])
+        
+        # 按资源类型筛选
+        if data.get('resource_type'):
+            query = query.filter_by(resource_type=data['resource_type'])
+        
+        # 按用户筛选
+        if data.get('username'):
+            query = query.filter(SystemLog.username.ilike(f"%{data['username']}%"))
+        
+        # 按时间范围筛选
+        if data.get('start_date'):
+            try:
+                start_dt = datetime.fromisoformat(data['start_date'])
+                query = query.filter(SystemLog.created_at >= start_dt)
+            except:
+                pass
+        
+        if data.get('end_date'):
+            try:
+                end_dt = datetime.fromisoformat(data['end_date'])
+                query = query.filter(SystemLog.created_at <= end_dt)
+            except:
+                pass
+        
+        # 排序和分页
+        query = query.order_by(SystemLog.created_at.desc())
+        total = query.count()
+        logs = query.paginate(page=page, per_page=per_page, error_out=False)
+        
+        return jsonify({
+            'status': 'success',
+            'data': [log.to_dict() for log in logs.items],
+            'pagination': {
+                'page': page,
+                'per_page': per_page,
+                'total': total,
+                'pages': logs.pages
+            }
+        }), 200
+    except Exception as e:
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+
+
+# ============================================================
+# 设备控制日志详情查看 API (Task5)
+# ============================================================
+
+@app.route('/device-logs/<int:device_id>', methods=['GET'])
+@login_required
+def device_logs_page(device_id):
+    """设备操作日志页面"""
+    try:
+        device = Device.query.get(device_id)
+        if not device:
+            return render_template('error.html', message='设备不存在'), 404
+        
+        return render_template('device-logs.html',
+                               device_id=device_id,
+                               device_name=device.device_name,
+                               username=session.get('username'),
+                               role=session.get('role'))
+    except Exception as e:
+        return render_template('error.html', message=str(e)), 500
+
+
+@app.route('/api/devices/<int:device_id>/logs', methods=['GET'])
+@api_login_required
+def get_device_logs(device_id):
+    """获取设备操作日志"""
+    try:
+        # 验证设备存在
+        device = Device.query.get(device_id)
+        if not device:
+            return jsonify({'status': 'error', 'message': '设备不存在'}), 404
+        
+        page = request.args.get('page', 1, type=int)
+        per_page = request.args.get('per_page', 50, type=int)
+        
+        # 查询该设备的日志
+        query = DeviceLog.query.filter_by(device_id=device_id).order_by(DeviceLog.log_time.desc())
+        total = query.count()
+        logs = query.paginate(page=page, per_page=per_page, error_out=False)
+        
+        return jsonify({
+            'status': 'success',
+            'data': [{
+                'id': log.id,
+                'action': log.action,
+                'operator': log.operator,
+                'previous_state': log.previous_state,
+                'current_state': log.current_state,
+                'details': log.details,
+                'log_time': log.log_time.isoformat() if log.log_time else None
+            } for log in logs.items],
+            'pagination': {
+                'page': page,
+                'per_page': per_page,
+                'total': total,
+                'pages': logs.pages
+            }
+        }), 200
+    except Exception as e:
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+
+
+@app.route('/api/devices/<int:device_id>/logs/filter', methods=['POST'])
+@api_login_required
+def filter_device_logs(device_id):
+    """筛选设备操作日志"""
+    try:
+        # 验证设备存在
+        device = Device.query.get(device_id)
+        if not device:
+            return jsonify({'status': 'error', 'message': '设备不存在'}), 404
+        
+        data = request.get_json()
+        page = data.get('page', 1)
+        per_page = data.get('per_page', 50)
+        
+        # 构建查询
+        query = DeviceLog.query.filter_by(device_id=device_id)
+        
+        # 按操作类型筛选
+        if data.get('action'):
+            query = query.filter_by(action=data['action'])
+        
+        # 按操作员筛选
+        if data.get('operator'):
+            query = query.filter(DeviceLog.operator.ilike(f"%{data['operator']}%"))
+        
+        # 按时间范围筛选
+        if data.get('start_time'):
+            try:
+                start_dt = datetime.fromisoformat(data['start_time'])
+                query = query.filter(DeviceLog.log_time >= start_dt)
+            except:
+                pass
+        
+        if data.get('end_time'):
+            try:
+                end_dt = datetime.fromisoformat(data['end_time'])
+                query = query.filter(DeviceLog.log_time <= end_dt)
+            except:
+                pass
+        
+        # 排序和分页
+        query = query.order_by(DeviceLog.log_time.desc())
+        total = query.count()
+        logs = query.paginate(page=page, per_page=per_page, error_out=False)
+        
+        return jsonify({
+            'status': 'success',
+            'data': [{
+                'id': log.id,
+                'action': log.action,
+                'operator': log.operator,
+                'previous_state': log.previous_state,
+                'current_state': log.current_state,
+                'details': log.details,
+                'log_time': log.log_time.isoformat() if log.log_time else None
+            } for log in logs.items],
+            'pagination': {
+                'page': page,
+                'per_page': per_page,
+                'total': total,
+                'pages': logs.pages
+            }
+        }), 200
+    except Exception as e:
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+
+
+# ============================================================
+# 数据导出功能 (Task6)
+# ============================================================
+
+def create_export_file(export_type):
+    """创建导出文件"""
+    try:
+        from openpyxl import Workbook
+        from openpyxl.styles import Font, PatternFill, Alignment
+        from io import BytesIO
+        
+        wb = Workbook()
+        ws = wb.active
+        
+        # 设置表头样式
+        header_fill = PatternFill(start_color='4472C4', end_color='4472C4', fill_type='solid')
+        header_font = Font(bold=True, color='FFFFFF')
+        
+        if export_type == 'ponds':
+            ws.title = '鱼塘列表'
+            ws['A1'] = '鱼塘ID'
+            ws['B1'] = '鱼塘名称'
+            ws['C1'] = '面积(亩)'
+            ws['D1'] = '位置'
+            ws['E1'] = '状态'
+            ws['F1'] = '创建时间'
+            
+            for col in ws.iter_cols(min_row=1, max_col=6, max_row=1):
+                for cell in col:
+                    cell.fill = header_fill
+                    cell.font = header_font
+            
+            ponds = Pond.query.all()
+            for idx, pond in enumerate(ponds, 2):
+                ws[f'A{idx}'] = pond.id
+                ws[f'B{idx}'] = pond.pond_name
+                ws[f'C{idx}'] = pond.area
+                ws[f'D{idx}'] = pond.location or '-'
+                ws[f'E{idx}'] = pond.status or '-'
+                ws[f'F{idx}'] = pond.created_at.strftime('%Y-%m-%d %H:%M:%S') if pond.created_at else '-'
+        
+        elif export_type == 'devices':
+            ws.title = '设备列表'
+            ws['A1'] = '设备ID'
+            ws['B1'] = '设备名称'
+            ws['C1'] = '设备类型'
+            ws['D1'] = '鱼塘'
+            ws['E1'] = '状态'
+            ws['F1'] = '功率消耗'
+            ws['G1'] = '最后活动'
+            
+            for col in ws.iter_cols(min_row=1, max_col=7, max_row=1):
+                for cell in col:
+                    cell.fill = header_fill
+                    cell.font = header_font
+            
+            devices = Device.query.all()
+            for idx, device in enumerate(devices, 2):
+                pond = Pond.query.get(device.pond_id)
+                ws[f'A{idx}'] = device.id
+                ws[f'B{idx}'] = device.device_name
+                ws[f'C{idx}'] = device.device_type
+                ws[f'D{idx}'] = pond.pond_name if pond else '-'
+                ws[f'E{idx}'] = device.status or '-'
+                ws[f'F{idx}'] = device.power_consumption or '-'
+                ws[f'G{idx}'] = device.last_active.strftime('%Y-%m-%d %H:%M:%S') if device.last_active else '-'
+        
+        elif export_type == 'water_quality':
+            ws.title = '水质数据'
+            ws['A1'] = '鱼塘'
+            ws['B1'] = '温度(°C)'
+            ws['C1'] = 'pH值'
+            ws['D1'] = '溶氧(mg/L)'
+            ws['E1'] = '盐度(%)'
+            ws['F1'] = '氨氮(mg/L)'
+            ws['G1'] = '亚硝酸盐(mg/L)'
+            ws['H1'] = '测量时间'
+            
+            for col in ws.iter_cols(min_row=1, max_col=8, max_row=1):
+                for cell in col:
+                    cell.fill = header_fill
+                    cell.font = header_font
+            
+            # 这里需要从水质数据表中获取，假设有类似的表
+            # 为了演示，我们只导出阈值配置
+            thresholds = WaterQualityThreshold.query.all()
+            ws.clear()
+            ws.title = '水质告警阈值'
+            ws['A1'] = '参数名称'
+            ws['B1'] = '最小值'
+            ws['C1'] = '最大值'
+            ws['D1'] = '告警级别'
+            ws['E1'] = '单位'
+            ws['F1'] = '状态'
+            
+            for col in ws.iter_cols(min_row=1, max_col=6, max_row=1):
+                for cell in col:
+                    cell.fill = header_fill
+                    cell.font = header_font
+            
+            for idx, threshold in enumerate(thresholds, 2):
+                ws[f'A{idx}'] = threshold.parameter_name
+                ws[f'B{idx}'] = threshold.min_value or '-'
+                ws[f'C{idx}'] = threshold.max_value or '-'
+                ws[f'D{idx}'] = threshold.warning_level
+                ws[f'E{idx}'] = threshold.unit or '-'
+                ws[f'F{idx}'] = '启用' if threshold.is_active else '禁用'
+        
+        elif export_type == 'device_logs':
+            ws.title = '设备操作日志'
+            ws['A1'] = '设备ID'
+            ws['B1'] = '操作'
+            ws['C1'] = '操作员'
+            ws['D1'] = '前一状态'
+            ws['E1'] = '当前状态'
+            ws['F1'] = '操作时间'
+            
+            for col in ws.iter_cols(min_row=1, max_col=6, max_row=1):
+                for cell in col:
+                    cell.fill = header_fill
+                    cell.font = header_font
+            
+            logs = DeviceLog.query.order_by(DeviceLog.log_time.desc()).limit(1000).all()
+            for idx, log in enumerate(logs, 2):
+                ws[f'A{idx}'] = log.device_id
+                ws[f'B{idx}'] = log.action
+                ws[f'C{idx}'] = log.operator or '-'
+                ws[f'D{idx}'] = log.previous_state or '-'
+                ws[f'E{idx}'] = log.current_state or '-'
+                ws[f'F{idx}'] = log.log_time.strftime('%Y-%m-%d %H:%M:%S') if log.log_time else '-'
+        
+        # 调整列宽
+        for column in ws.columns:
+            max_length = 0
+            column_letter = column[0].column_letter
+            for cell in column:
+                try:
+                    if len(str(cell.value)) > max_length:
+                        max_length = len(str(cell.value))
+                except:
+                    pass
+            adjusted_width = min(max_length + 2, 50)
+            ws.column_dimensions[column_letter].width = adjusted_width
+        
+        # 保存到字节流
+        output = BytesIO()
+        wb.save(output)
+        output.seek(0)
+        return output
+    
+    except ImportError:
+        return None
+    except Exception as e:
+        print(f"[ERROR] 导出文件创建失败: {e}")
+        return None
+
+
+@app.route('/api/export/<export_type>', methods=['POST'])
+@api_login_required
+def export_data(export_type):
+    """导出数据为Excel文件"""
+    try:
+        if session.get('role') != 'admin':
+            return jsonify({'status': 'error', 'message': '仅管理员可以导出数据'}), 403
+        
+        # 验证导出类型
+        valid_types = ['ponds', 'devices', 'water_quality', 'device_logs']
+        if export_type not in valid_types:
+            return jsonify({'status': 'error', 'message': '无效的导出类型'}), 400
+        
+        # 创建导出文件
+        file_obj = create_export_file(export_type)
+        if file_obj is None:
+            return jsonify({'status': 'error', 'message': 'openpyxl库未安装，无法导出'}), 500
+        
+        # 生成文件名
+        timestamp = datetime.utcnow().strftime('%Y%m%d_%H%M%S')
+        type_names = {
+            'ponds': '鱼塘列表',
+            'devices': '设备列表',
+            'water_quality': '水质数据',
+            'device_logs': '设备日志'
+        }
+        filename = f'{type_names.get(export_type, export_type)}_{timestamp}.xlsx'
+        
+        # 记录审计日志
+        record_audit_log('export', 'Data', details=f'导出{type_names.get(export_type)}')
+        
+        # 返回文件
+        from flask import send_file
+        return send_file(
+            file_obj,
+            mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            as_attachment=True,
+            download_name=filename
+        )
+    
+    except Exception as e:
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+
+
+# ============================================================
+# 登录系统优化与密码管理 (Task7)
+# ============================================================
+
+@app.route('/user-profile', methods=['GET'])
+@login_required
+def user_profile():
+    """用户资料页面"""
+    try:
+        return render_template('user-profile.html',
+                               username=session.get('username'),
+                               role=session.get('role'))
+    except Exception as e:
+        return render_template('error.html', message=str(e)), 500
+
+
+@app.route('/api/user/change-password', methods=['POST'])
+@api_login_required
+def change_password():
+    """修改用户密码"""
+    try:
+        data = request.get_json()
+        current_password = data.get('current_password')
+        new_password = data.get('new_password')
+        
+        # 验证输入
+        if not current_password or not new_password:
+            return jsonify({'status': 'error', 'message': '密码不能为空'}), 400
+        
+        if len(new_password) < 6:
+            return jsonify({'status': 'error', 'message': '新密码长度至少为6个字符'}), 400
+        
+        user = User.query.get(session['user_id'])
+        if not user:
+            return jsonify({'status': 'error', 'message': '用户不存在'}), 404
+        
+        # 验证当前密码
+        if user.password_hash != current_password:
+            return jsonify({'status': 'error', 'message': '当前密码错误'}), 401
+        
+        # 更新密码
+        user.password_hash = new_password
+        user.updated_at = datetime.utcnow()
+        db.session.commit()
+        
+        # 记录审计日志
+        record_audit_log('update', 'User', user.id, details='用户修改密码')
+        
+        return jsonify({
+            'status': 'success',
+            'message': '密码修改成功'
+        }), 200
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+
+
+@app.route('/api/admin/create-user', methods=['POST'])
+@api_login_required
+def create_user():
+    """创建新用户（仅管理员）"""
+    try:
+        if session.get('role') != 'admin':
+            return jsonify({'status': 'error', 'message': '仅管理员可以创建用户'}), 403
+        
+        data = request.get_json()
+        username = data.get('username')
+        password = data.get('password')
+        role = data.get('role', 'user')
+        full_name = data.get('full_name')
+        email = data.get('email')
+        
+        # 验证输入
+        if not username or not password:
+            return jsonify({'status': 'error', 'message': '用户名和密码不能为空'}), 400
+        
+        if len(password) < 6:
+            return jsonify({'status': 'error', 'message': '密码长度至少为6个字符'}), 400
+        
+        # 检查用户名是否已存在
+        if User.query.filter_by(username=username).first():
+            return jsonify({'status': 'error', 'message': '用户名已存在'}), 409
+        
+        # 验证角色
+        valid_roles = ['admin', 'user', 'supplier']
+        if role not in valid_roles:
+            return jsonify({'status': 'error', 'message': f'无效的角色，必须为: {", ".join(valid_roles)}'}), 400
+        
+        # 创建新用户
+        new_user = User(
+            username=username,
+            password_hash=password,
+            role=role,
+            full_name=full_name,
+            email=email,
+            is_active=True,
+            created_at=datetime.utcnow()
+        )
+        
+        db.session.add(new_user)
+        db.session.commit()
+        
+        # 记录审计日志
+        record_audit_log('create', 'User', new_user.id, 
+                        details=f'管理员{session.get("username")}创建新用户{username}')
+        
+        return jsonify({
+            'status': 'success',
+            'message': f'用户{username}创建成功',
+            'data': {
+                'id': new_user.id,
+                'username': new_user.username,
+                'role': new_user.role,
+                'full_name': new_user.full_name,
+                'email': new_user.email
+            }
+        }), 201
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'status': 'error', 'message': str(e)}), 500
 
 
 # ============================================================
@@ -1202,6 +2134,13 @@ if __name__ == '__main__':
             print('数据库表已创建或已存在')
         except Exception as e:
             print(f'创建表失败: {e}')
+    
+    # 调试输出：打印所有 /api/ 路由
+    print('\n=== 已注册的 API 路由 ===')
+    for rule in app.url_map.iter_rules():
+        if '/api' in rule.rule:
+            print(f'  {rule.rule} [{rule.methods}]')
+    print()
     
     print('智慧渔场管理系统启动中...')
     print('访问地址: http://127.0.0.1:5000')

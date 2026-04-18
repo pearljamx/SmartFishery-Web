@@ -12,6 +12,10 @@
     >
   </li>
   <li class="nav-item">
+    <a class="nav-link" data-toggle="tab" href="#productsTab">产品管理</a
+    >
+  </li>
+  <li class="nav-item">
     <a class="nav-link" data-toggle="tab" href="#ordersTab">采购订单</a>
   </li>
 </ul>
@@ -47,7 +51,55 @@
   </div>
 </div>
 
-<!-- Tab 2: Orders -->
+<!-- Tab 2: Products Management -->
+<div id="productsTab" class="tab-pane fade">
+  <div style="padding: 30px 0">
+    <div style="display: flex; gap: 20px; margin-bottom: 20px">
+      <input
+        type="text"
+        id="productSearch"
+        placeholder="搜索产品名称、品种..."
+        class="form-control"
+        style="max-width: 300px"
+      />
+      <select id="productSupplierFilter" class="form-control" style="max-width: 200px">
+        <option value="">所有供应商</option>
+      </select>
+      <select id="productStatusFilter" class="form-control" style="max-width: 150px">
+        <option value="">全部状态</option>
+        <option value="1">上架</option>
+        <option value="0">下架</option>
+      </select>
+    </div>
+
+    <div class="card">
+      <div class="card-body">
+        <div class="table-responsive">
+          <table class="table table-striped" id="productsTable">
+            <thead>
+              <tr>
+                <th>产品名称</th>
+                <th>品种</th>
+                <th>规格</th>
+                <th>供应商</th>
+                <th>单价</th>
+                <th>状态</th>
+                <th>操作</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td colspan="7" class="text-center">加载中...</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Tab 3: Orders -->
 <div id="ordersTab" class="tab-pane fade">
   <div style="padding: 30px 0">
     <div style="display: flex; gap: 10px; margin-bottom: 20px">
@@ -123,9 +175,10 @@
       </div>
       <div class="modal-body">
         <form id="supplierForm">
+          <input type="hidden" id="supplierId" />
           <div class="form-group">
             <label>供应商名称</label>
-            <input type="text" class="form-control" name="name" required />
+            <input type="text" class="form-control" name="name" id="supplierName" required />
           </div>
           <div class="form-group">
             <label>联系人</label>
@@ -133,24 +186,32 @@
               type="text"
               class="form-control"
               name="contact_person"
+              id="supplierContactPerson"
               required
             />
           </div>
           <div class="form-group">
             <label>电话</label>
-            <input type="tel" class="form-control" name="phone" required />
+            <input type="tel" class="form-control" name="phone" id="supplierPhone" required />
           </div>
           <div class="form-group">
             <label>邮箱</label>
-            <input type="email" class="form-control" name="email" required />
+            <input type="email" class="form-control" name="email" id="supplierEmail" required />
           </div>
           <div class="form-group">
             <label>地址</label>
-            <textarea class="form-control" name="address" rows="2"></textarea>
+            <textarea class="form-control" name="address" id="supplierAddress" rows="2"></textarea>
           </div>
           <div class="form-group">
             <label>备注</label>
-            <textarea class="form-control" name="notes" rows="2"></textarea>
+            <textarea class="form-control" name="notes" id="supplierNotes" rows="2"></textarea>
+          </div>
+          <div class="form-group" id="supplierStatusGroup" style="display: none;">
+            <label>状态</label>
+            <select class="form-control" name="status" id="supplierStatus">
+              <option value="active">正常</option>
+              <option value="inactive">禁用</option>
+            </select>
           </div>
         </form>
       </div>
@@ -164,6 +225,39 @@
         <button type="button" class="btn btn-primary" onclick="saveSupplier()">
           保存
         </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Supplier Products Modal -->
+<div class="modal fade" id="supplierProductsModal" tabindex="-1">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content" style="background: linear-gradient(135deg, #1e3a5f 0%, #0f1f35 100%); border: 2px solid var(--border-color);">
+      <div class="modal-header" style="border-bottom: 2px solid var(--border-color)">
+        <h5 class="modal-title" id="supplierProductsTitle">供应商产品</h5>
+        <button type="button" class="close text-light" data-dismiss="modal">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div id="supplierProductsList" class="table-responsive">
+          <table class="table table-striped">
+            <thead>
+              <tr>
+                <th>产品名称</th>
+                <th>品种</th>
+                <th>规格</th>
+                <th>单价</th>
+                <th>状态</th>
+              </tr>
+            </thead>
+            <tbody id="supplierProductsTableBody">
+              <tr><td colspan="5" class="text-center">加载中...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <div class="modal-footer" style="border-top: 2px solid var(--border-color)">
+        <button type="button" class="btn btn-secondary" data-dismiss="modal">关闭</button>
       </div>
     </div>
   </div>
@@ -235,6 +329,87 @@
             提交订单
           </button>
         </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Product Detail Modal -->
+<div class="modal fade" id="productDetailModal" tabindex="-1">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content" style="background: linear-gradient(135deg, #1e3a5f 0%, #0f1f35 100%); border: 2px solid var(--border-color);">
+      <div class="modal-header" style="border-bottom: 2px solid var(--border-color)">
+        <h5 class="modal-title">产品详情</h5>
+        <button type="button" class="close text-light" data-dismiss="modal">&times;</button>
+      </div>
+      <div class="modal-body" id="productDetailContent">
+        <!-- 内容动态加载 -->
+      </div>
+      <div class="modal-footer" style="border-top: 2px solid var(--border-color)">
+        <button type="button" class="btn btn-secondary" data-dismiss="modal">关闭</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Product Edit Modal -->
+<div class="modal fade" id="productEditModal" tabindex="-1">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content" style="background: linear-gradient(135deg, #1e3a5f 0%, #0f1f35 100%); border: 2px solid var(--border-color);">
+      <div class="modal-header" style="border-bottom: 2px solid var(--border-color)">
+        <h5 class="modal-title">编辑产品</h5>
+        <button type="button" class="close text-light" data-dismiss="modal">&times;</button>
+      </div>
+      <div class="modal-body">
+        <form id="productEditForm">
+          <input type="hidden" id="editProductId" />
+          <div class="form-group">
+            <label>产品名称 <span class="text-danger">*</span></label>
+            <input type="text" class="form-control" id="editProductName" required />
+          </div>
+          <div class="form-row">
+            <div class="form-group col-md-6">
+              <label>品种 <span class="text-danger">*</span></label>
+              <input type="text" class="form-control" id="editProductSpecies" required />
+            </div>
+            <div class="form-group col-md-6">
+              <label>规格</label>
+              <input type="text" class="form-control" id="editProductGrade" />
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group col-md-6">
+              <label>销售价 <span class="text-danger">*</span></label>
+              <input type="number" step="0.01" class="form-control" id="editProductUnitPrice" required />
+            </div>
+            <div class="form-group col-md-6">
+              <label>成本价</label>
+              <input type="number" step="0.01" class="form-control" id="editProductCostPrice" />
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group col-md-6">
+              <label>生长周期（天）</label>
+              <input type="number" class="form-control" id="editProductGrowthCycle" />
+            </div>
+            <div class="form-group col-md-6">
+              <label>成活率（%）</label>
+              <input type="number" min="0" max="100" step="0.1" class="form-control" id="editProductSurvivalRate" />
+            </div>
+          </div>
+          <div class="form-group">
+            <label>描述</label>
+            <textarea class="form-control" id="editProductDescription" rows="3"></textarea>
+          </div>
+          <div class="form-check">
+            <input type="checkbox" class="form-check-input" id="editProductActive" checked />
+            <label class="form-check-label" for="editProductActive">上架</label>
+          </div>
+        </form>
+      </div>
+      <div class="modal-footer" style="border-top: 2px solid var(--border-color)">
+        <button type="button" class="btn btn-secondary" data-dismiss="modal">取消</button>
+        <button type="button" class="btn btn-primary" onclick="saveProductChanges()">保存</button>
       </div>
     </div>
   </div>
@@ -352,6 +527,44 @@
       opacity: 1;
     }
   }
+
+  /* 产品管理样式 */
+  .detail-panel {
+    background: rgba(255, 255, 255, 0.05);
+    border-left: 4px solid #60a5fa;
+    padding: 15px;
+    border-radius: 4px;
+    margin: 10px 0;
+  }
+
+  .detail-row {
+    display: flex;
+    justify-content: space-between;
+    padding: 8px 0;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  }
+
+  .detail-row:last-child {
+    border-bottom: none;
+  }
+
+  .detail-row .label {
+    font-weight: bold;
+    color: #a0aec0;
+    min-width: 100px;
+  }
+
+  .detail-row .value {
+    color: #e2e8f0;
+    flex: 1;
+    text-align: right;
+  }
+
+  #productsTable button {
+    margin: 2px;
+    padding: 4px 8px;
+    font-size: 12px;
+  }
 </style>
 
 <script>
@@ -360,6 +573,7 @@
 
   document.addEventListener("DOMContentLoaded", function () {
     loadSuppliers();
+    loadProducts();
     loadOrders();
     loadSuppliersList();
   });
@@ -411,6 +625,8 @@
 
   function showAddSupplierModal() {
     document.getElementById("supplierForm").reset();
+    document.getElementById("supplierId").value = '';
+    document.getElementById("supplierStatusGroup").style.display = 'none';
     document.getElementById("supplierModalTitle").textContent = "添加供应商";
     $("#supplierModal").modal("show");
   }
@@ -502,7 +718,7 @@
   }
 
   function loadSupplierProducts(supplierId) {
-    apiCall(`/api/suppliers/${supplierId}/products`, "GET", null, {
+    apiCall(`/suppliers/${supplierId}/products`, "GET", null, {
       successCallback: function (response) {
         if (response.status === "success") {
           const div = document.getElementById("productsSelection");
@@ -586,23 +802,306 @@
     });
   }
 
+  function saveSupplier() {
+    const supplierId = document.getElementById("supplierId").value;
+    const formData = new FormData(document.getElementById("supplierForm"));
+    const data = Object.fromEntries(formData);
+
+    if (supplierId) {
+      // 编辑供应商
+      apiCall(`/suppliers/${supplierId}/edit`, "POST", data, {
+        successCallback: function () {
+          showNotification("供应商已更新", "success");
+          $("#supplierModal").modal("hide");
+          loadSuppliers();
+        },
+        errorCallback: function (error) {
+          showNotification("更新失败: " + error, "error");
+        }
+      });
+    } else {
+      // 添加供应商
+      apiCall("/suppliers/add", "POST", data, {
+        successCallback: function () {
+          showNotification("供应商已保存", "success");
+          $("#supplierModal").modal("hide");
+          loadSuppliers();
+        },
+        errorCallback: function (error) {
+          showNotification("保存失败: " + error, "error");
+        }
+      });
+    }
+  }
+
   function editSupplier(id) {
-    showNotification("编辑功能正在开发中 (ID: " + id + ")", "info");
+    // 获取供应商详情
+    apiCall(`/suppliers/${id}`, "GET", null, {
+      successCallback: function (response) {
+        if (response.status === "success") {
+          const data = response.data;
+          document.getElementById("supplierId").value = id;
+          document.getElementById("supplierName").value = data.name;
+          document.getElementById("supplierContactPerson").value = data.contact_person;
+          document.getElementById("supplierPhone").value = data.phone;
+          document.getElementById("supplierEmail").value = data.email;
+          document.getElementById("supplierAddress").value = data.address || '';
+          document.getElementById("supplierNotes").value = data.notes || '';
+          document.getElementById("supplierStatus").value = data.status || 'active';
+          document.getElementById("supplierStatusGroup").style.display = 'block';
+          document.getElementById("supplierModalTitle").textContent = "编辑供应商";
+          $("#supplierModal").modal("show");
+        }
+      },
+      errorCallback: function (error) {
+        showNotification("加载供应商信息失败", "error");
+      }
+    });
   }
 
   function deleteSupplier(id) {
-    if (confirm("确认要删除该供应商吗?")) {
-      showNotification("供应商已删除", "success");
-      loadSuppliers();
+    if (confirm("确认要删除该供应商吗？此操作不可撤销。")) {
+      apiCall(`/suppliers/${id}/delete`, "DELETE", null, {
+        successCallback: function (response) {
+          showNotification(response.message || "供应商已删除", "success");
+          loadSuppliers();
+        },
+        errorCallback: function (error) {
+          showNotification("删除失败: " + error, "error");
+        }
+      });
     }
   }
 
   function viewSupplierProducts(id) {
-    showNotification("供应商产品页面 (ID: " + id + ")", "info");
+    // 显示供应商的产品列表
+    document.getElementById("supplierProductsTitle").textContent = "供应商产品";
+    
+    apiCall(`/suppliers/${id}/products`, "GET", null, {
+      successCallback: function (response) {
+        if (response.status === "success") {
+          const tbody = document.getElementById("supplierProductsTableBody");
+          tbody.innerHTML = "";
+          
+          if (response.data.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="5" class="text-center">该供应商暂无产品</td></tr>';
+          } else {
+            response.data.forEach(product => {
+              const statusText = product.is_active ? '上架' : '下架';
+              const statusClass = product.is_active ? 'success' : 'secondary';
+              const row = document.createElement('tr');
+              row.innerHTML = `
+                <td>${product.product_name}</td>
+                <td>${product.species}</td>
+                <td>${product.grade || '-'}</td>
+                <td>¥${product.unit_price.toFixed(2)}</td>
+                <td><span class="badge badge-${statusClass}">${statusText}</span></td>
+              `;
+              tbody.appendChild(row);
+            });
+          }
+          
+          $("#supplierProductsModal").modal("show");
+        }
+      },
+      errorCallback: function (error) {
+        showNotification("加载产品失败: " + error, "error");
+      }
+    });
   }
 
   function viewOrder(id) {
     showNotification("订单详情 (ID: " + id + ")", "info");
+  }
+
+  // ============================================================
+  // 产品管理函数 (Task1)
+  // ============================================================
+
+  function loadProducts() {
+    apiCall("/products", "GET", null, {
+      successCallback: function (response) {
+        if (response.status === "success") {
+          const tbody = document.querySelector("#productsTable tbody");
+          tbody.innerHTML = "";
+
+          if (response.data.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="7" class="text-center">暂无产品</td></tr>';
+            return;
+          }
+
+          response.data.forEach(product => {
+            const statusText = product.is_active ? '上架' : '下架';
+            const statusClass = product.is_active ? 'success' : 'secondary';
+            
+            const row = document.createElement('tr');
+            row.innerHTML = `
+              <td>${product.product_name}</td>
+              <td>${product.species}</td>
+              <td>${product.grade || '-'}</td>
+              <td>${product.supplier_name}</td>
+              <td>¥${product.unit_price.toFixed(2)}</td>
+              <td><span class="badge badge-${statusClass}">${statusText}</span></td>
+              <td>
+                <button class="btn btn-sm btn-info" onclick="showProductDetail(${product.id})" title="查看">
+                  <i class="fas fa-eye"></i>
+                </button>
+                <button class="btn btn-sm btn-warning" onclick="editProduct(${product.id})" title="编辑">
+                  <i class="fas fa-edit"></i>
+                </button>
+                <button class="btn btn-sm btn-danger" onclick="deleteProduct(${product.id})" title="删除">
+                  <i class="fas fa-trash"></i>
+                </button>
+              </td>
+            `;
+            tbody.appendChild(row);
+          });
+        }
+      },
+      errorCallback: function (error) {
+        console.error("加载产品失败:", error);
+        document.querySelector("#productsTable tbody").innerHTML = 
+          '<tr><td colspan="7" class="text-center text-danger">加载失败</td></tr>';
+      }
+    });
+  }
+
+  function showProductDetail(productId) {
+    apiCall(`/products/${productId}`, "GET", null, {
+      successCallback: function (response) {
+        if (response.status === "success") {
+          const data = response.data;
+          let detailHtml = `
+            <div class="detail-panel">
+              <div class="detail-row">
+                <span class="label">产品名称:</span>
+                <span class="value">${data.product_name}</span>
+              </div>
+              <div class="detail-row">
+                <span class="label">品种:</span>
+                <span class="value">${data.species}</span>
+              </div>
+              <div class="detail-row">
+                <span class="label">规格:</span>
+                <span class="value">${data.grade || '-'}</span>
+              </div>
+              <div class="detail-row">
+                <span class="label">供应商:</span>
+                <span class="value">${data.supplier_name} (${data.supplier_phone || '未知'})</span>
+              </div>
+              <div class="detail-row">
+                <span class="label">销售价:</span>
+                <span class="value">¥${data.unit_price.toFixed(2)}</span>
+              </div>
+              <div class="detail-row">
+                <span class="label">成本价:</span>
+                <span class="value">${data.cost_price ? '¥' + data.cost_price.toFixed(2) : '-'}</span>
+              </div>
+              <div class="detail-row">
+                <span class="label">生长周期:</span>
+                <span class="value">${data.growth_cycle_days ? data.growth_cycle_days + ' 天' : '-'}</span>
+              </div>
+              <div class="detail-row">
+                <span class="label">成活率:</span>
+                <span class="value">${data.survival_rate ? (data.survival_rate * 100).toFixed(1) + '%' : '-'}</span>
+              </div>
+              <div class="detail-row">
+                <span class="label">状态:</span>
+                <span class="value">${data.is_active ? '<span class="badge badge-success">上架</span>' : '<span class="badge badge-secondary">下架</span>'}</span>
+              </div>
+              <div class="detail-row">
+                <span class="label">描述:</span>
+                <span class="value">${data.description || '-'}</span>
+              </div>
+              <div class="detail-row">
+                <span class="label">创建时间:</span>
+                <span class="value">${new Date(data.created_at).toLocaleString('zh-CN')}</span>
+              </div>
+            </div>
+          `;
+          
+          document.getElementById("productDetailContent").innerHTML = detailHtml;
+          $("#productDetailModal").modal("show");
+        }
+      },
+      errorCallback: function (error) {
+        showNotification("获取产品详情失败", "error");
+      }
+    });
+  }
+
+  function editProduct(productId) {
+    apiCall(`/products/${productId}`, "GET", null, {
+      successCallback: function (response) {
+        if (response.status === "success") {
+          const data = response.data;
+          // 填充编辑表单
+          document.getElementById("editProductId").value = productId;
+          document.getElementById("editProductName").value = data.product_name;
+          document.getElementById("editProductSpecies").value = data.species;
+          document.getElementById("editProductGrade").value = data.grade || '';
+          document.getElementById("editProductUnitPrice").value = data.unit_price;
+          document.getElementById("editProductCostPrice").value = data.cost_price || '';
+          document.getElementById("editProductGrowthCycle").value = data.growth_cycle_days || '';
+          document.getElementById("editProductSurvivalRate").value = data.survival_rate ? (data.survival_rate * 100) : '';
+          document.getElementById("editProductDescription").value = data.description || '';
+          document.getElementById("editProductActive").checked = data.is_active;
+          
+          $("#productEditModal").modal("show");
+        }
+      },
+      errorCallback: function (error) {
+        showNotification("获取产品信息失败", "error");
+      }
+    });
+  }
+
+  function saveProductChanges() {
+    const productId = document.getElementById("editProductId").value;
+    const data = {
+      product_name: document.getElementById("editProductName").value,
+      species: document.getElementById("editProductSpecies").value,
+      grade: document.getElementById("editProductGrade").value,
+      unit_price: parseFloat(document.getElementById("editProductUnitPrice").value),
+      cost_price: document.getElementById("editProductCostPrice").value ? parseFloat(document.getElementById("editProductCostPrice").value) : null,
+      growth_cycle_days: document.getElementById("editProductGrowthCycle").value ? parseInt(document.getElementById("editProductGrowthCycle").value) : null,
+      survival_rate: document.getElementById("editProductSurvivalRate").value ? parseFloat(document.getElementById("editProductSurvivalRate").value) / 100 : null,
+      description: document.getElementById("editProductDescription").value,
+      is_active: document.getElementById("editProductActive").checked
+    };
+    
+    apiCall(`/products/${productId}/edit`, "POST", data, {
+      successCallback: function (response) {
+        if (response.status === "success") {
+          showNotification("产品更新成功", "success");
+          $("#productEditModal").modal("hide");
+          loadProducts(); // 刷新列表
+        } else {
+          showNotification(response.message || "更新失败", "error");
+        }
+      },
+      errorCallback: function (error) {
+        showNotification("更新失败: " + error, "error");
+      }
+    });
+  }
+
+  function deleteProduct(productId) {
+    if (confirm("确定要删除这个产品吗？此操作不可撤销。")) {
+      apiCall(`/products/${productId}/delete`, "DELETE", null, {
+        successCallback: function (response) {
+          if (response.status === "success") {
+            showNotification(response.message || "删除成功", "success");
+            loadProducts(); // 刷新列表
+          } else {
+            showNotification(response.message || "删除失败", "error");
+          }
+        },
+        errorCallback: function (error) {
+          showNotification("删除失败: " + error, "error");
+        }
+      });
+    }
   }
 </script>
 {% endblock %}

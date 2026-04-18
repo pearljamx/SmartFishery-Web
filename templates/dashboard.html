@@ -108,9 +108,30 @@
       <h1><i class="fas fa-tachometer-alt"></i> 仪表板</h1>
       <p>实时监测渔场全景数据，智能决策一目了然</p>
     </div>
-    <button class="refresh-btn" onclick="refreshDashboard()">
-      <i class="fas fa-sync-alt"></i> 刷新数据
-    </button>
+    <div style="display: flex; gap: 10px;">
+      <button class="refresh-btn" onclick="refreshDashboard()">
+        <i class="fas fa-sync-alt"></i> 刷新数据
+      </button>
+      <div class="dropdown" style="display: inline-block;">
+        <button class="refresh-btn" type="button" id="exportBtn" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+          <i class="fas fa-download"></i> 导出数据
+        </button>
+        <div class="dropdown-menu dropdown-menu-right" aria-labelledby="exportBtn" style="background: rgba(15, 31, 53, 0.95); border: 1px solid #333; border-radius: 6px; padding: 10px 0; min-width: 180px;">
+          <a class="dropdown-item" href="#" onclick="exportData('ponds')" style="color: #60a5fa; padding: 8px 16px; display: block; text-decoration: none;">
+            <i class="fas fa-download"></i> 导出鱼塘列表
+          </a>
+          <a class="dropdown-item" href="#" onclick="exportData('devices')" style="color: #60a5fa; padding: 8px 16px; display: block; text-decoration: none;">
+            <i class="fas fa-download"></i> 导出设备列表
+          </a>
+          <a class="dropdown-item" href="#" onclick="exportData('water_quality')" style="color: #60a5fa; padding: 8px 16px; display: block; text-decoration: none;">
+            <i class="fas fa-download"></i> 导出水质数据
+          </a>
+          <a class="dropdown-item" href="#" onclick="exportData('device_logs')" style="color: #60a5fa; padding: 8px 16px; display: block; text-decoration: none;">
+            <i class="fas fa-download"></i> 导出设备日志
+          </a>
+        </div>
+      </div>
+    </div>
   </div>
   <div class="data-timestamp">
     最后更新: <span id="updateTime">{{ now.strftime('%H:%M:%S') }}</span>
@@ -482,6 +503,66 @@
       if (timeElement) {
           timeElement.textContent = timeStr;
       }
+  }
+
+  // 导出数据
+  function exportData(type) {
+      event.preventDefault();
+      
+      const typeNames = {
+          'ponds': '鱼塘列表',
+          'devices': '设备列表',
+          'water_quality': '水质数据',
+          'device_logs': '设备日志'
+      };
+      
+      const btn = event.target.closest('a');
+      if (btn.classList.contains('loading')) return;
+      btn.classList.add('loading');
+      
+      fetch(`/api/export/${type}`, {
+          method: 'POST',
+          headers: {
+              'Content-Type': 'application/json'
+          }
+      })
+      .then(response => {
+          if (response.ok) {
+              // 获取文件名
+              const contentDisposition = response.headers.get('content-disposition');
+              let filename = `${typeNames[type]}.xlsx`;
+              if (contentDisposition) {
+                  const filenameMatch = contentDisposition.match(/filename[^;=\n]*=(?:(['"]).*?\1|[^;\n]*)/);
+                  if (filenameMatch && filenameMatch[0]) {
+                      filename = filenameMatch[0].split('=')[1].replace(/['"]/g, '');
+                  }
+              }
+              
+              return response.blob().then(blob => {
+                  const url = window.URL.createObjectURL(blob);
+                  const a = document.createElement('a');
+                  a.href = url;
+                  a.download = filename;
+                  document.body.appendChild(a);
+                  a.click();
+                  window.URL.revokeObjectURL(url);
+                  a.remove();
+                  showToast(`${typeNames[type]}导出成功`, 'success');
+              });
+          } else {
+              return response.json().then(data => {
+                  throw new Error(data.message || '导出失败');
+              });
+          }
+      })
+      .catch(error => {
+          showToast('导出失败: ' + error.message, 'error');
+      })
+      .finally(() => {
+          btn.classList.remove('loading');
+          // 关闭dropdown
+          $('#exportBtn').dropdown('toggle');
+      });
   }
 
   // 显示提示信息

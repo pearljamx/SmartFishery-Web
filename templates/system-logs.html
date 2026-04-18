@@ -1,0 +1,506 @@
+{% extends "base.html" %} {% block title %}系统操作日志 - 智慧渔场管理系统{% endblock %} {% block extra_css %}
+<style>
+  .filter-panel {
+    background: rgba(0, 0, 0, 0.3);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 20px;
+    margin-bottom: 30px;
+  }
+
+  .filter-row {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 15px;
+    margin-bottom: 15px;
+  }
+
+  .filter-group {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .filter-group label {
+    font-size: 12px;
+    color: var(--text-secondary);
+    margin-bottom: 5px;
+    font-weight: bold;
+  }
+
+  .filter-group input,
+  .filter-group select {
+    padding: 8px 12px;
+    background: rgba(0, 0, 0, 0.3);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    color: var(--text-primary);
+    font-size: 14px;
+  }
+
+  .filter-group input:focus,
+  .filter-group select:focus {
+    border-color: #60a5fa;
+    outline: none;
+    box-shadow: 0 0 5px rgba(96, 165, 250, 0.3);
+  }
+
+  .filter-buttons {
+    display: flex;
+    gap: 10px;
+    justify-content: flex-end;
+    margin-top: 15px;
+  }
+
+  .filter-buttons button {
+    padding: 8px 16px;
+    border: none;
+    border-radius: 6px;
+    font-weight: bold;
+    cursor: pointer;
+    transition: all 0.3s ease;
+  }
+
+  .btn-filter {
+    background: #60a5fa;
+    color: white;
+  }
+
+  .btn-filter:hover {
+    background: #3b82f6;
+    transform: translateY(-2px);
+  }
+
+  .btn-reset {
+    background: var(--border-color);
+    color: var(--text-primary);
+  }
+
+  .btn-reset:hover {
+    background: rgba(96, 165, 250, 0.2);
+  }
+
+  .logs-table {
+    width: 100%;
+    border-collapse: collapse;
+    background: rgba(0, 0, 0, 0.2);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    overflow: hidden;
+  }
+
+  .logs-table thead {
+    background: rgba(96, 165, 250, 0.1);
+    border-bottom: 2px solid var(--border-color);
+  }
+
+  .logs-table th {
+    padding: 12px;
+    text-align: left;
+    font-weight: bold;
+    color: #60a5fa;
+    font-size: 13px;
+  }
+
+  .logs-table td {
+    padding: 12px;
+    border-bottom: 1px solid var(--border-color);
+    font-size: 13px;
+  }
+
+  .logs-table tbody tr:hover {
+    background: rgba(96, 165, 250, 0.05);
+  }
+
+  .action-badge {
+    display: inline-block;
+    padding: 4px 12px;
+    border-radius: 4px;
+    font-size: 11px;
+    font-weight: bold;
+    text-transform: uppercase;
+  }
+
+  .badge-create {
+    background: rgba(16, 185, 129, 0.2);
+    color: #10b981;
+  }
+
+  .badge-update {
+    background: rgba(96, 165, 250, 0.2);
+    color: #60a5fa;
+  }
+
+  .badge-delete {
+    background: rgba(239, 68, 68, 0.2);
+    color: #ef4444;
+  }
+
+  .badge-control {
+    background: rgba(249, 115, 22, 0.2);
+    color: #f97316;
+  }
+
+  .badge-login {
+    background: rgba(168, 85, 247, 0.2);
+    color: #a855f7;
+  }
+
+  .resource-type {
+    color: var(--text-secondary);
+    font-size: 12px;
+  }
+
+  .timestamp {
+    color: var(--text-secondary);
+    font-size: 12px;
+    white-space: nowrap;
+  }
+
+  .pagination {
+    display: flex;
+    justify-content: center;
+    gap: 5px;
+    margin-top: 30px;
+  }
+
+  .pagination button,
+  .pagination span {
+    padding: 8px 12px;
+    border: 1px solid var(--border-color);
+    background: rgba(0, 0, 0, 0.2);
+    color: var(--text-primary);
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 12px;
+  }
+
+  .pagination button:hover:not(:disabled) {
+    border-color: #60a5fa;
+    background: rgba(96, 165, 250, 0.1);
+  }
+
+  .pagination button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  .pagination .active {
+    background: #60a5fa;
+    color: white;
+    border-color: #60a5fa;
+  }
+
+  .page-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 30px;
+    padding-bottom: 20px;
+    border-bottom: 2px solid var(--border-color);
+  }
+
+  .stats-row {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 15px;
+    margin-bottom: 30px;
+  }
+
+  .stat-card {
+    background: rgba(0, 0, 0, 0.2);
+    border-left: 4px solid #60a5fa;
+    padding: 15px;
+    border-radius: 6px;
+  }
+
+  .stat-label {
+    color: var(--text-secondary);
+    font-size: 12px;
+    margin-bottom: 5px;
+  }
+
+  .stat-value {
+    color: #60a5fa;
+    font-size: 20px;
+    font-weight: bold;
+  }
+
+  .empty-state {
+    text-align: center;
+    padding: 60px 20px;
+    color: var(--text-secondary);
+  }
+
+  .empty-state-icon {
+    font-size: 48px;
+    margin-bottom: 20px;
+    opacity: 0.5;
+  }
+</style>
+{% endblock %} {% block content %}
+<div class="page-header">
+  <div>
+    <h1><i class="fas fa-history"></i> 系统操作日志</h1>
+    <p>查看并管理所有系统操作记录，支持多维度筛选</p>
+  </div>
+</div>
+
+<!-- 统计信息 -->
+<div class="stats-row">
+  <div class="stat-card">
+    <div class="stat-label">总操作数</div>
+    <div class="stat-value" id="totalLogs">0</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">今日操作</div>
+    <div class="stat-value" id="todayLogs">0</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">修改操作</div>
+    <div class="stat-value" id="updateLogs">0</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">删除操作</div>
+    <div class="stat-value" id="deleteLogs">0</div>
+  </div>
+</div>
+
+<!-- 筛选面板 -->
+<div class="filter-panel">
+  <div class="filter-row">
+    <div class="filter-group">
+      <label>操作类型</label>
+      <select id="filterAction">
+        <option value="">全部</option>
+        <option value="create">新增</option>
+        <option value="update">修改</option>
+        <option value="delete">删除</option>
+        <option value="control">控制</option>
+        <option value="login">登录</option>
+      </select>
+    </div>
+    <div class="filter-group">
+      <label>资源类型</label>
+      <select id="filterResourceType">
+        <option value="">全部</option>
+        <option value="Pond">鱼塘</option>
+        <option value="Device">设备</option>
+        <option value="SeedlingProduct">鱼苗产品</option>
+        <option value="PurchaseOrder">采购订单</option>
+        <option value="User">用户</option>
+        <option value="Threshold">告警阈值</option>
+      </select>
+    </div>
+    <div class="filter-group">
+      <label>操作用户</label>
+      <input type="text" id="filterUsername" placeholder="输入用户名..." />
+    </div>
+  </div>
+
+  <div class="filter-row">
+    <div class="filter-group">
+      <label>开始时间</label>
+      <input type="datetime-local" id="filterStartDate" />
+    </div>
+    <div class="filter-group">
+      <label>结束时间</label>
+      <input type="datetime-local" id="filterEndDate" />
+    </div>
+  </div>
+
+  <div class="filter-buttons">
+    <button class="btn-filter" onclick="applyFilters()">
+      <i class="fas fa-search"></i> 筛选
+    </button>
+    <button class="btn-reset" onclick="resetFilters()">
+      <i class="fas fa-redo"></i> 重置
+    </button>
+  </div>
+</div>
+
+<!-- 日志表格 -->
+<table class="logs-table" id="logsTable">
+  <thead>
+    <tr>
+      <th>时间</th>
+      <th>操作类型</th>
+      <th>资源</th>
+      <th>操作用户</th>
+      <th>操作详情</th>
+      <th>IP地址</th>
+    </tr>
+  </thead>
+  <tbody id="logsTableBody">
+    <tr>
+      <td colspan="6" style="text-align: center; padding: 40px">加载中...</td>
+    </tr>
+  </tbody>
+</table>
+
+<!-- 分页 -->
+<div class="pagination" id="pagination"></div>
+
+<script>
+  let currentPage = 1;
+  const perPage = 50;
+
+  document.addEventListener('DOMContentLoaded', function() {
+    loadLogs();
+  });
+
+  function loadLogs(page = 1) {
+    currentPage = page;
+    apiCall('/system-logs?page=' + page + '&per_page=' + perPage, 'GET', null, {
+      successCallback: function(response) {
+        if (response.status === 'success') {
+          renderLogsTable(response.data);
+          renderPagination(response.pagination);
+          updateStats(response.data);
+        }
+      },
+      errorCallback: function(error) {
+        console.error('加载日志失败:', error);
+      }
+    });
+  }
+
+  function applyFilters() {
+    const filters = {
+      page: 1,
+      per_page: perPage,
+      action: document.getElementById('filterAction').value || undefined,
+      resource_type: document.getElementById('filterResourceType').value || undefined,
+      username: document.getElementById('filterUsername').value || undefined,
+      start_date: document.getElementById('filterStartDate').value || undefined,
+      end_date: document.getElementById('filterEndDate').value || undefined
+    };
+
+    apiCall('/system-logs/filter', 'POST', filters, {
+      successCallback: function(response) {
+        if (response.status === 'success') {
+          renderLogsTable(response.data);
+          renderPagination(response.pagination);
+          updateStats(response.data);
+        }
+      },
+      errorCallback: function(error) {
+        console.error('筛选失败:', error);
+      }
+    });
+  }
+
+  function resetFilters() {
+    document.getElementById('filterAction').value = '';
+    document.getElementById('filterResourceType').value = '';
+    document.getElementById('filterUsername').value = '';
+    document.getElementById('filterStartDate').value = '';
+    document.getElementById('filterEndDate').value = '';
+    loadLogs(1);
+  }
+
+  function renderLogsTable(logs) {
+    const tbody = document.getElementById('logsTableBody');
+    tbody.innerHTML = '';
+
+    if (logs.length === 0) {
+      tbody.innerHTML =
+        '<tr><td colspan="6" style="text-align: center; padding: 40px; color: var(--text-secondary);">暂无日志记录</td></tr>';
+      return;
+    }
+
+    logs.forEach(log => {
+      const row = document.createElement('tr');
+      row.innerHTML = `
+        <td class="timestamp">${new Date(log.created_at).toLocaleString('zh-CN')}</td>
+        <td>
+          <span class="action-badge badge-${log.action}">
+            ${getActionLabel(log.action)}
+          </span>
+        </td>
+        <td>
+          <div>${log.resource_name || '-'}</div>
+          <div class="resource-type">${log.resource_type}</div>
+        </td>
+        <td>${log.username || '系统'}</td>
+        <td>
+          <small>${log.details || '-'}</small>
+        </td>
+        <td>${log.ip_address || '-'}</td>
+      `;
+      tbody.appendChild(row);
+    });
+  }
+
+  function renderPagination(pagination) {
+    const paginationDiv = document.getElementById('pagination');
+    paginationDiv.innerHTML = '';
+
+    // 上一页
+    const prevBtn = document.createElement('button');
+    prevBtn.textContent = '上一页';
+    prevBtn.disabled = pagination.page === 1;
+    prevBtn.onclick = () => {
+      if (pagination.page > 1) applyFilters() && (currentPage = pagination.page - 1) && loadLogs(currentPage);
+    };
+    paginationDiv.appendChild(prevBtn);
+
+    // 页码
+    for (let i = 1; i <= pagination.pages; i++) {
+      if (
+        i === 1 ||
+        i === pagination.pages ||
+        (i >= pagination.page - 2 && i <= pagination.page + 2)
+      ) {
+        const pageBtn = document.createElement('button');
+        pageBtn.textContent = i;
+        pageBtn.className = i === pagination.page ? 'active' : '';
+        pageBtn.onclick = () => {
+          loadLogs(i);
+        };
+        paginationDiv.appendChild(pageBtn);
+      } else if (i === 2 || i === pagination.pages - 1) {
+        const ellipsis = document.createElement('span');
+        ellipsis.textContent = '...';
+        paginationDiv.appendChild(ellipsis);
+      }
+    }
+
+    // 下一页
+    const nextBtn = document.createElement('button');
+    nextBtn.textContent = '下一页';
+    nextBtn.disabled = pagination.page === pagination.pages;
+    nextBtn.onclick = () => {
+      if (pagination.page < pagination.pages) loadLogs(pagination.page + 1);
+    };
+    paginationDiv.appendChild(nextBtn);
+  }
+
+  function updateStats(logs) {
+    const today = new Date().toDateString();
+    let todayCount = 0;
+    let updateCount = 0;
+    let deleteCount = 0;
+
+    logs.forEach(log => {
+      if (new Date(log.created_at).toDateString() === today) todayCount++;
+      if (log.action === 'update') updateCount++;
+      if (log.action === 'delete') deleteCount++;
+    });
+
+    document.getElementById('todayLogs').textContent = todayCount;
+    document.getElementById('updateLogs').textContent = updateCount;
+    document.getElementById('deleteLogs').textContent = deleteCount;
+  }
+
+  function getActionLabel(action) {
+    const labels = {
+      create: '新增',
+      update: '修改',
+      delete: '删除',
+      control: '控制',
+      login: '登录'
+    };
+    return labels[action] || action;
+  }
+</script>
+{% endblock %}

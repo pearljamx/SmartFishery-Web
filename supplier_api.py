@@ -228,6 +228,46 @@ def register_supplier_apis(app, db, Supplier, SeedlingProduct, SeedlingInventory
             }), 200
         except Exception as e:
             return jsonify({'status': 'error', 'message': str(e)}), 500
+
+
+    @app.route('/api/suppliers/<int:supplier_id>/delete', methods=['DELETE'])
+    def api_delete_supplier(supplier_id):
+        """删除供应商"""
+        try:
+            user = get_current_user()
+            if not user or user.role != 'admin':
+                return jsonify({'status': 'error', 'message': '仅管理员可操作'}), 403
+            
+            supplier = Supplier.query.get(supplier_id)
+            if not supplier:
+                return jsonify({'status': 'error', 'message': '供应商不存在'}), 404
+            
+            # 检查是否有关联的产品或订单
+            product_count = SeedlingProduct.query.filter_by(supplier_id=supplier_id).count()
+            order_count = PurchaseOrder.query.filter_by(supplier_id=supplier_id).count()
+            
+            if product_count > 0 or order_count > 0:
+                return jsonify({
+                    'status': 'error',
+                    'message': f'无法删除：该供应商有 {product_count} 个产品和 {order_count} 个订单'
+                }), 409
+            
+            supplier_name = supplier.name
+            db.session.delete(supplier)
+            db.session.commit()
+            
+            # 审计日志
+            log_audit('delete_supplier', 'suppliers', supplier_id, 
+                     old_value=f"删除的供应商: {supplier_name}",
+                     new_value='已删除')
+            
+            return jsonify({
+                'status': 'success',
+                'message': f'供应商"{supplier_name}"删除成功'
+            }), 200
+        except Exception as e:
+            db.session.rollback()
+            return jsonify({'status': 'error', 'message': str(e)}), 500
     
     
     # ============================================================
@@ -615,6 +655,169 @@ def register_supplier_apis(app, db, Supplier, SeedlingProduct, SeedlingInventory
                 }
             }), 200
         except Exception as e:
+            return jsonify({'status': 'error', 'message': str(e)}), 500
+
+    # ============================================================
+    # 管理员产品管理 API (Task1)
+    # ============================================================
+
+    @app.route('/api/products', methods=['GET'])
+    def get_all_products():
+        """获取所有鱼苗产品列表（管理员）"""
+        try:
+            if session.get('role') != 'admin':
+                return jsonify({'status': 'error', 'message': '仅管理员可访问'}), 403
+            
+            products = SeedlingProduct.query.all()
+            product_list = []
+            
+            for p in products:
+                supplier = Supplier.query.get(p.supplier_id)
+                product_list.append({
+                    'id': p.id,
+                    'product_name': p.product_name,
+                    'species': p.species,
+                    'grade': p.grade,
+                    'unit_price': p.unit_price,
+                    'cost_price': p.cost_price,
+                    'growth_cycle_days': p.growth_cycle_days,
+                    'survival_rate': p.survival_rate,
+                    'is_active': p.is_active,
+                    'supplier_id': p.supplier_id,
+                    'supplier_name': supplier.name if supplier else '未知供应商',
+                    'created_at': p.created_at.isoformat() if p.created_at else None
+                })
+            
+            return jsonify({'status': 'success', 'data': product_list}), 200
+        except Exception as e:
+            return jsonify({'status': 'error', 'message': str(e)}), 500
+
+    @app.route('/api/products/<int:product_id>', methods=['GET'])
+    def get_product_detail(product_id):
+        """获取单个产品详情（查看产品功能）"""
+        try:
+            if session.get('role') != 'admin':
+                return jsonify({'status': 'error', 'message': '仅管理员可访问'}), 403
+            
+            product = SeedlingProduct.query.get(product_id)
+            if not product:
+                return jsonify({'status': 'error', 'message': '产品不存在'}), 404
+            
+            supplier = Supplier.query.get(product.supplier_id)
+            
+            return jsonify({
+                'status': 'success',
+                'data': {
+                    'id': product.id,
+                    'product_name': product.product_name,
+                    'species': product.species,
+                    'grade': product.grade,
+                    'unit_price': product.unit_price,
+                    'cost_price': product.cost_price,
+                    'growth_cycle_days': product.growth_cycle_days,
+                    'survival_rate': product.survival_rate,
+                    'description': product.description,
+                    'image_url': product.image_url,
+                    'is_active': product.is_active,
+                    'supplier_id': product.supplier_id,
+                    'supplier_name': supplier.name if supplier else '未知供应商',
+                    'supplier_phone': supplier.phone if supplier else '未知',
+                    'created_at': product.created_at.isoformat() if product.created_at else None,
+                    'updated_at': product.updated_at.isoformat() if product.updated_at else None
+                }
+            }), 200
+        except Exception as e:
+            return jsonify({'status': 'error', 'message': str(e)}), 500
+
+    @app.route('/api/products/<int:product_id>/edit', methods=['POST'])
+    def edit_product(product_id):
+        """编辑产品信息"""
+        try:
+            if session.get('role') != 'admin':
+                return jsonify({'status': 'error', 'message': '仅管理员可访问'}), 403
+            
+            product = SeedlingProduct.query.get(product_id)
+            if not product:
+                return jsonify({'status': 'error', 'message': '产品不存在'}), 404
+            
+            data = request.get_json()
+            
+            # 更新字段
+            if 'product_name' in data:
+                product.product_name = data['product_name']
+            if 'species' in data:
+                product.species = data['species']
+            if 'grade' in data:
+                product.grade = data['grade']
+            if 'unit_price' in data:
+                product.unit_price = float(data['unit_price'])
+            if 'cost_price' in data:
+                product.cost_price = float(data['cost_price']) if data['cost_price'] else None
+            if 'growth_cycle_days' in data:
+                product.growth_cycle_days = int(data['growth_cycle_days']) if data['growth_cycle_days'] else None
+            if 'survival_rate' in data:
+                product.survival_rate = float(data['survival_rate']) if data['survival_rate'] else None
+            if 'description' in data:
+                product.description = data['description']
+            if 'is_active' in data:
+                product.is_active = data['is_active']
+            
+            product.updated_at = datetime.utcnow()
+            db.session.commit()
+            
+            # 审计日志
+            log_audit('edit', 'SeedlingProduct', product_id, 
+                     old_value=f"更新前的产品: {product.product_name}", 
+                     new_value=f"更新后的产品: {product.product_name}")
+            
+            return jsonify({
+                'status': 'success',
+                'message': '产品更新成功',
+                'data': product.to_dict()
+            }), 200
+        except Exception as e:
+            db.session.rollback()
+            return jsonify({'status': 'error', 'message': str(e)}), 500
+
+    @app.route('/api/products/<int:product_id>/delete', methods=['DELETE'])
+    def delete_product(product_id):
+        """删除产品"""
+        try:
+            if session.get('role') != 'admin':
+                return jsonify({'status': 'error', 'message': '仅管理员可访问'}), 403
+            
+            product = SeedlingProduct.query.get(product_id)
+            if not product:
+                return jsonify({'status': 'error', 'message': '产品不存在'}), 404
+            
+            product_name = product.product_name
+            
+            # 检查是否有订单项引用此产品
+            order_items = OrderItem.query.filter_by(product_id=product_id).count()
+            if order_items > 0:
+                return jsonify({
+                    'status': 'error',
+                    'message': f'无法删除：该产品已被 {order_items} 个订单引用'
+                }), 409
+            
+            # 删除库存记录
+            SeedlingInventory.query.filter_by(product_id=product_id).delete()
+            
+            # 删除产品
+            db.session.delete(product)
+            db.session.commit()
+            
+            # 审计日志
+            log_audit('delete', 'SeedlingProduct', product_id,
+                     old_value=f"删除的产品: {product_name}",
+                     new_value='已删除')
+            
+            return jsonify({
+                'status': 'success',
+                'message': f'产品"{product_name}"删除成功'
+            }), 200
+        except Exception as e:
+            db.session.rollback()
             return jsonify({'status': 'error', 'message': str(e)}), 500
 
 print("[OK] 供应商管理API模块已加载")

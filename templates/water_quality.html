@@ -208,6 +208,58 @@ endblock %} {% block extra_css %}
     border-color: var(--primary-color);
     color: white;
   }
+
+  /* 汇总视图和表格样式 */
+  #allPondsView {
+    transition: opacity 0.3s ease;
+  }
+
+  #singlePondView {
+    transition: opacity 0.3s ease;
+  }
+
+  .quality-info {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+  }
+
+  .table-hover tbody tr:hover {
+    background-color: rgba(0, 212, 255, 0.05);
+    cursor: pointer;
+  }
+
+  .status-badge {
+    display: inline-block;
+    padding: 4px 12px;
+    border-radius: 20px;
+    font-size: 0.85rem;
+    font-weight: 600;
+  }
+
+  .status-badge.normal {
+    background-color: rgba(0, 255, 136, 0.2);
+    color: #00ff88;
+    border: 1px solid rgba(0, 255, 136, 0.3);
+  }
+
+  .status-badge.warning {
+    background-color: rgba(255, 170, 0, 0.2);
+    color: #ffaa00;
+    border: 1px solid rgba(255, 170, 0, 0.3);
+  }
+
+  .status-badge.danger {
+    background-color: rgba(255, 68, 68, 0.2);
+    color: #ff4444;
+    border: 1px solid rgba(255, 68, 68, 0.3);
+  }
+
+  .pond-detail-btn {
+    padding: 4px 12px;
+    font-size: 0.85rem;
+  }
 </style>
 {% endblock %} {% block content %}
 <div class="page-header">
@@ -246,379 +298,538 @@ endblock %} {% block extra_css %}
 </div>
 {% endif %}
 
-<!-- 实时水质指标 -->
-<div class="water-quality-grid">
-  {% set default_pond_id = ponds[0].id if ponds else 0 %} {% set pond_data =
-  pond_quality_data.get(default_pond_id, {}) %}
-
-  <!-- 水温 -->
-  <div class="quality-indicator">
-    <div class="quality-header">
-      <div class="quality-icon">
-        <i class="fas fa-thermometer-half"></i>
-      </div>
-      <div class="quality-name">
-        <h5>水温</h5>
-        <p>Temperature</p>
-      </div>
-    </div>
-    <div class="quality-gauge" id="temperatureValue">
-      <div class="gauge-bar">
+<!-- 全部鱼池汇总视图 -->
+<div id="allPondsView" style="display: block">
+  <!-- 汇总统计卡片 -->
+  <div
+    class="water-quality-grid"
+    id="summaryCardsContainer"
+    style="margin-bottom: 30px"
+  >
+    <div class="quality-indicator">
+      <div class="quality-header">
         <div
-          class="gauge-fill"
-          style="width: {% if pond_data.temperature %}{{ (pond_data.temperature / 40) * 100 }}%{% else %}0%{% endif %}"
-        ></div>
-      </div>
-      <div class="gauge-info">
-        <span class="gauge-value"
-          >{{ pond_data.get('temperature', '--') }}</span
+          class="quality-icon"
+          style="background: rgba(255, 170, 0, 0.1); color: #ffaa00"
         >
-        <span class="gauge-range">范围: 20-35°C</span>
+          <i class="fas fa-thermometer-half"></i>
+        </div>
+        <div class="quality-name">
+          <h5>平均水温</h5>
+          <p>Average Temperature</p>
+        </div>
       </div>
-    </div>
-    <div class="quality-status">
-      <span class="status-dot"></span>
-      {% if pond_data.temperature and 20 <= pond_data.temperature <= 35 %}正常{%
-      else %}--{% endif %}
-    </div>
-  </div>
-
-  <!-- PH值 -->
-  <div class="quality-indicator">
-    <div class="quality-header">
-      <div class="quality-icon">
-        <i class="fas fa-flask"></i>
-      </div>
-      <div class="quality-name">
-        <h5>PH值</h5>
-        <p>Acidity Level</p>
-      </div>
-    </div>
-    <div class="quality-gauge" id="phValue">
-      <div class="gauge-bar">
-        <div
-          class="gauge-fill"
-          style="width: {% if pond_data.ph_value %}{{ (pond_data.ph_value / 14) * 100 }}%{% else %}0%{% endif %}"
-        ></div>
-      </div>
-      <div class="gauge-info">
-        <span class="gauge-value">{{ pond_data.get('ph_value', '--') }}</span>
-        <span class="gauge-range">范围: 6.0-8.5</span>
-      </div>
-    </div>
-    <div class="quality-status">
-      <span class="status-dot"></span>
-      {% if pond_data.ph_value and 6.0 <= pond_data.ph_value <= 8.5 %}正常{%
-      else %}--{% endif %}
-    </div>
-  </div>
-
-  <!-- 食物值 -->
-  <div class="quality-indicator">
-    <div class="quality-header">
-      <div class="quality-icon">
-        <i class="fas fa-drumstick-bite"></i>
-      </div>
-      <div class="quality-name">
-        <h5>食物值</h5>
-        <p>Food Level</p>
-      </div>
-    </div>
-    <div class="quality-gauge" id="foodValue">
-      <div class="gauge-bar">
-        <div
-          class="gauge-fill"
-          style="width: {% if pond_data.food_value %}{{ (pond_data.food_value / 100) * 100 }}%{% else %}0%{% endif %}"
-        ></div>
-      </div>
-      <div class="gauge-info">
-        <span class="gauge-value">{{ pond_data.get('food_value', '--') }}</span>
-        <span class="gauge-range">范围: 0-100</span>
-      </div>
-    </div>
-    <div class="quality-status">
-      <span class="status-dot"></span>
-      {% if pond_data.food_value and 30 <= pond_data.food_value <= 70 %}正常{%
-      else %}--{% endif %}
-    </div>
-  </div>
-
-  <!-- 溶解氧 -->
-  <div class="quality-indicator">
-    <div class="quality-header">
-      <div class="quality-icon">
-        <i class="fas fa-wind"></i>
-      </div>
-      <div class="quality-name">
-        <h5>溶解氧</h5>
-        <p>Dissolved Oxygen</p>
-      </div>
-    </div>
-    <div class="quality-gauge" id="oxygenValue">
-      <div class="gauge-bar">
-        <div
-          class="gauge-fill"
-          style="width: {% if pond_data.dissolved_oxygen %}{{ (pond_data.dissolved_oxygen / 12) * 100 }}%{% else %}0%{% endif %}"
-        ></div>
-      </div>
-      <div class="gauge-info">
-        <span class="gauge-value"
-          >{{ pond_data.get('dissolved_oxygen', '--') }}</span
+      <div class="quality-info" style="padding: 15px; text-align: center">
+        <span class="gauge-value" id="summaryTempValue">--</span>
+        <span
+          style="
+            color: var(--text-secondary);
+            font-size: 0.85rem;
+            display: block;
+            margin-top: 5px;
+          "
+          >°C</span
         >
-        <span class="gauge-range">范围: 5-12 mg/L</span>
       </div>
     </div>
-    <div class="quality-status">
-      <span class="status-dot"></span>
-      {% if pond_data.dissolved_oxygen and pond_data.dissolved_oxygen >= 5
-      %}良好{% else %}--{% endif %}
-    </div>
-  </div>
 
-  <!-- 盐度 -->
-  <div class="quality-indicator">
-    <div class="quality-header">
-      <div class="quality-icon">
-        <i class="fas fa-droplet"></i>
-      </div>
-      <div class="quality-name">
-        <h5>盐度</h5>
-        <p>Salinity</p>
-      </div>
-    </div>
-    <div class="quality-gauge" id="salinityValue">
-      <div class="gauge-bar">
+    <div class="quality-indicator">
+      <div class="quality-header">
         <div
-          class="gauge-fill"
-          style="width: {% if pond_data.salinity %}{{ (pond_data.salinity / 40) * 100 }}%{% else %}0%{% endif %}"
-        ></div>
-      </div>
-      <div class="gauge-info">
-        <span class="gauge-value">{{ pond_data.get('salinity', '--') }}</span>
-        <span class="gauge-range">范围: 0-40‰</span>
-      </div>
-    </div>
-    <div class="quality-status">
-      <span class="status-dot"></span>
-      正常
-    </div>
-  </div>
-
-  <!-- 氨氮 -->
-  <div class="quality-indicator">
-    <div class="quality-header">
-      <div class="quality-icon">
-        <i class="fas fa-atom"></i>
-      </div>
-      <div class="quality-name">
-        <h5>氨氮</h5>
-        <p>Ammonia Nitrogen</p>
-      </div>
-    </div>
-    <div class="quality-gauge" id="ammoniaValue">
-      <div class="gauge-bar">
-        <div
-          class="gauge-fill"
-          style="width: {% if pond_data.ammonia_nitrogen %}{{ (pond_data.ammonia_nitrogen / 1) * 100 }}%{% else %}0%{% endif %}"
-        ></div>
-      </div>
-      <div class="gauge-info">
-        <span class="gauge-value"
-          >{{ pond_data.get('ammonia_nitrogen', '--') }}</span
+          class="quality-icon"
+          style="background: rgba(100, 200, 255, 0.1); color: #64c8ff"
         >
-        <span class="gauge-range">范围: 0-1 mg/L</span>
+          <i class="fas fa-flask"></i>
+        </div>
+        <div class="quality-name">
+          <h5>平均PH值</h5>
+          <p>Average pH</p>
+        </div>
+      </div>
+      <div class="quality-info" style="padding: 15px; text-align: center">
+        <span class="gauge-value" id="summaryPhValue">--</span>
+        <span
+          style="
+            color: var(--text-secondary);
+            font-size: 0.85rem;
+            display: block;
+            margin-top: 5px;
+          "
+        ></span>
       </div>
     </div>
-    <div class="quality-status warning">
-      <span class="status-dot"></span>
-      {% if pond_data.ammonia_nitrogen and pond_data.ammonia_nitrogen > 0.5
-      %}需要关注{% else %}正常{% endif %}
-    </div>
-  </div>
 
-  <!-- 亚硝酸盐 -->
-  <div class="quality-indicator">
-    <div class="quality-header">
-      <div class="quality-icon">
-        <i class="fas fa-chemical"></i>
-      </div>
-      <div class="quality-name">
-        <h5>亚硝酸盐</h5>
-        <p>Nitrite Nitrogen</p>
-      </div>
-    </div>
-    <div class="quality-gauge" id="nitriteValue">
-      <div class="gauge-bar">
+    <div class="quality-indicator">
+      <div class="quality-header">
         <div
-          class="gauge-fill"
-          style="width: {% if pond_data.nitrite_nitrogen %}{{ (pond_data.nitrite_nitrogen / 0.2) * 100 }}%{% else %}0%{% endif %}"
-        ></div>
-      </div>
-      <div class="gauge-info">
-        <span class="gauge-value"
-          >{{ pond_data.get('nitrite_nitrogen', '--') }}</span
+          class="quality-icon"
+          style="background: rgba(0, 255, 200, 0.1); color: #00ffc8"
         >
-        <span class="gauge-range">范围: 0-0.2 mg/L</span>
+          <i class="fas fa-wind"></i>
+        </div>
+        <div class="quality-name">
+          <h5>平均溶解氧</h5>
+          <p>Average Dissolved Oxygen</p>
+        </div>
+      </div>
+      <div class="quality-info" style="padding: 15px; text-align: center">
+        <span class="gauge-value" id="summaryOxygenValue">--</span>
+        <span
+          style="
+            color: var(--text-secondary);
+            font-size: 0.85rem;
+            display: block;
+            margin-top: 5px;
+          "
+          >mg/L</span
+        >
       </div>
     </div>
-    <div class="quality-status">
-      <span class="status-dot"></span>
-      正常
+
+    <div class="quality-indicator">
+      <div class="quality-header">
+        <div
+          class="quality-icon"
+          style="background: rgba(255, 68, 68, 0.1); color: #ff4444"
+        >
+          <i class="fas fa-exclamation-triangle"></i>
+        </div>
+        <div class="quality-name">
+          <h5>异常鱼池</h5>
+          <p>Abnormal Ponds</p>
+        </div>
+      </div>
+      <div class="quality-info" style="padding: 15px; text-align: center">
+        <span class="gauge-value" id="summaryAbnormalCount">--</span>
+        <span
+          style="
+            color: var(--text-secondary);
+            font-size: 0.85rem;
+            display: block;
+            margin-top: 5px;
+          "
+          >个</span
+        >
+      </div>
     </div>
   </div>
 
-  <!-- 数据详细表格 -->
-  <div class="card">
+  <!-- 鱼池列表表格 -->
+  <div class="card" style="margin-bottom: 30px">
     <div class="card-header">
-      <h5><i class="fas fa-table"></i> 水质参数详细数据表</h5>
+      <h5><i class="fas fa-list"></i> 鱼池监测列表</h5>
     </div>
     <div class="card-body">
       <div class="table-responsive">
-        <table class="table">
+        <table class="table table-hover">
           <thead>
             <tr>
-              <th>时间</th>
+              <th>鱼池名称</th>
+              <th>鱼类类型</th>
+              <th>尾数</th>
               <th>水温 (°C)</th>
               <th>PH值</th>
-              <th>食物值</th>
               <th>溶解氧 (mg/L)</th>
-              <th>盐度 (‰)</th>
-              <th>氨氮 (mg/L)</th>
-              <th>亚硝酸盐 (mg/L)</th>
+              <th>状态</th>
+              <th>最后更新</th>
               <th>操作</th>
             </tr>
           </thead>
-          <tbody>
+          <tbody id="pondsTableBody">
             <tr>
-              <td>2024-03-16 10:30</td>
-              <td><span style="color: var(--primary-color)">26.3</span></td>
-              <td><span style="color: var(--primary-color)">7.8</span></td>
-              <td><span style="color: var(--primary-color)">46</span></td>
-              <td><span style="color: #00ff88">8.2</span></td>
-              <td><span style="color: var(--primary-color)">14.5</span></td>
-              <td><span style="color: #ffaa00">3.6</span></td>
-              <td><span style="color: var(--primary-color)">1.4</span></td>
-              <td><button class="btn btn-sm btn-primary">查看</button></td>
-            </tr>
-            <tr>
-              <td>2024-03-16 08:30</td>
-              <td><span style="color: var(--primary-color)">25.8</span></td>
-              <td><span style="color: var(--primary-color)">7.9</span></td>
-              <td><span style="color: var(--primary-color)">45</span></td>
-              <td><span style="color: #00ff88">8.0</span></td>
-              <td><span style="color: var(--primary-color)">14.3</span></td>
-              <td><span style="color: #ffaa00">3.8</span></td>
-              <td><span style="color: var(--primary-color)">1.5</span></td>
-              <td><button class="btn btn-sm btn-primary">查看</button></td>
-            </tr>
-            <tr>
-              <td>2024-03-16 06:30</td>
-              <td><span style="color: var(--primary-color)">25.2</span></td>
-              <td><span style="color: var(--primary-color)">7.7</span></td>
-              <td><span style="color: var(--primary-color)">47</span></td>
-              <td><span style="color: #00ff88">8.4</span></td>
-              <td><span style="color: var(--primary-color)">14.1</span></td>
-              <td><span style="color: #ffaa00">3.5</span></td>
-              <td><span style="color: var(--primary-color)">1.3</span></td>
-              <td><button class="btn btn-sm btn-primary">查看</button></td>
+              <td
+                colspan="9"
+                style="text-align: center; color: var(--text-secondary)"
+              >
+                加载中...
+              </td>
             </tr>
           </tbody>
         </table>
       </div>
     </div>
   </div>
+</div>
 
-  <!-- 告警阈值设置 -->
-  <div class="card" style="margin-top: 20px">
-    <div class="card-header">
-      <h5><i class="fas fa-cog"></i> 告警阈值设置</h5>
+<!-- 单鱼池详细视图 -->
+<div id="singlePondView" style="display: none">
+  <!-- 实时水质指标 -->
+  <div class="water-quality-grid">
+    {% set default_pond_id = ponds[0].id if ponds else 0 %} {% set pond_data =
+    pond_quality_data.get(default_pond_id, {}) %}
+
+    <!-- 水温 -->
+    <div class="quality-indicator">
+      <div class="quality-header">
+        <div class="quality-icon">
+          <i class="fas fa-thermometer-half"></i>
+        </div>
+        <div class="quality-name">
+          <h5>水温</h5>
+          <p>Temperature</p>
+        </div>
+      </div>
+      <div class="quality-gauge" id="temperatureValue">
+        <div class="gauge-bar">
+          <div
+            class="gauge-fill"
+            style="width: {% if pond_data.temperature %}{{ (pond_data.temperature / 40) * 100 }}%{% else %}0%{% endif %}"
+          ></div>
+        </div>
+        <div class="gauge-info">
+          <span class="gauge-value"
+            >{{ pond_data.get('temperature', '--') }}</span
+          >
+          <span class="gauge-range">范围: 20-35°C</span>
+        </div>
+      </div>
+      <div class="quality-status">
+        <span class="status-dot"></span>
+        {% if pond_data.temperature and 20 <= pond_data.temperature <= 35
+        %}正常{% else %}--{% endif %}
+      </div>
     </div>
-    <div class="card-body">
-      <div
-        style="
-          display: grid;
-          grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-          gap: 20px;
-        "
-      >
-        <div
-          style="
-            background: rgba(0, 212, 255, 0.05);
-            padding: 15px;
-            border-radius: 8px;
-            border-left: 3px solid var(--primary-color);
-          "
-        >
-          <label class="form-label">水温告警范围</label>
-          <div style="display: flex; gap: 10px; margin-bottom: 10px">
-            <input
-              type="number"
-              class="form-control"
-              placeholder="最低 °C"
-              value="18"
-            />
-            <input
-              type="number"
-              class="form-control"
-              placeholder="最高 °C"
-              value="32"
-            />
-          </div>
-          <button class="btn btn-sm btn-primary">保存</button>
+
+    <!-- PH值 -->
+    <div class="quality-indicator">
+      <div class="quality-header">
+        <div class="quality-icon">
+          <i class="fas fa-flask"></i>
         </div>
-        <div
-          style="
-            background: rgba(0, 212, 255, 0.05);
-            padding: 15px;
-            border-radius: 8px;
-            border-left: 3px solid var(--primary-color);
-          "
-        >
-          <label class="form-label">溶解氧告警阈值</label>
-          <div style="display: flex; gap: 10px; margin-bottom: 10px">
-            <input
-              type="number"
-              class="form-control"
-              placeholder="最低值 mg/L"
-              value="5"
-            />
-          </div>
-          <button class="btn btn-sm btn-primary">保存</button>
+        <div class="quality-name">
+          <h5>PH值</h5>
+          <p>Acidity Level</p>
         </div>
+      </div>
+      <div class="quality-gauge" id="phValue">
+        <div class="gauge-bar">
+          <div
+            class="gauge-fill"
+            style="width: {% if pond_data.ph_value %}{{ (pond_data.ph_value / 14) * 100 }}%{% else %}0%{% endif %}"
+          ></div>
+        </div>
+        <div class="gauge-info">
+          <span class="gauge-value">{{ pond_data.get('ph_value', '--') }}</span>
+          <span class="gauge-range">范围: 6.0-8.5</span>
+        </div>
+      </div>
+      <div class="quality-status">
+        <span class="status-dot"></span>
+        {% if pond_data.ph_value and 6.0 <= pond_data.ph_value <= 8.5 %}正常{%
+        else %}--{% endif %}
+      </div>
+    </div>
+
+    <!-- 食物值 -->
+    <div class="quality-indicator">
+      <div class="quality-header">
+        <div class="quality-icon">
+          <i class="fas fa-drumstick-bite"></i>
+        </div>
+        <div class="quality-name">
+          <h5>食物值</h5>
+          <p>Food Level</p>
+        </div>
+      </div>
+      <div class="quality-gauge" id="foodValue">
+        <div class="gauge-bar">
+          <div
+            class="gauge-fill"
+            style="width: {% if pond_data.food_value %}{{ (pond_data.food_value / 100) * 100 }}%{% else %}0%{% endif %}"
+          ></div>
+        </div>
+        <div class="gauge-info">
+          <span class="gauge-value"
+            >{{ pond_data.get('food_value', '--') }}</span
+          >
+          <span class="gauge-range">范围: 0-100</span>
+        </div>
+      </div>
+      <div class="quality-status">
+        <span class="status-dot"></span>
+        {% if pond_data.food_value and 30 <= pond_data.food_value <= 70 %}正常{%
+        else %}--{% endif %}
+      </div>
+    </div>
+
+    <!-- 溶解氧 -->
+    <div class="quality-indicator">
+      <div class="quality-header">
+        <div class="quality-icon">
+          <i class="fas fa-wind"></i>
+        </div>
+        <div class="quality-name">
+          <h5>溶解氧</h5>
+          <p>Dissolved Oxygen</p>
+        </div>
+      </div>
+      <div class="quality-gauge" id="oxygenValue">
+        <div class="gauge-bar">
+          <div
+            class="gauge-fill"
+            style="width: {% if pond_data.dissolved_oxygen %}{{ (pond_data.dissolved_oxygen / 12) * 100 }}%{% else %}0%{% endif %}"
+          ></div>
+        </div>
+        <div class="gauge-info">
+          <span class="gauge-value"
+            >{{ pond_data.get('dissolved_oxygen', '--') }}</span
+          >
+          <span class="gauge-range">范围: 5-12 mg/L</span>
+        </div>
+      </div>
+      <div class="quality-status">
+        <span class="status-dot"></span>
+        {% if pond_data.dissolved_oxygen and pond_data.dissolved_oxygen >= 5
+        %}良好{% else %}--{% endif %}
+      </div>
+    </div>
+
+    <!-- 盐度 -->
+    <div class="quality-indicator">
+      <div class="quality-header">
+        <div class="quality-icon">
+          <i class="fas fa-droplet"></i>
+        </div>
+        <div class="quality-name">
+          <h5>盐度</h5>
+          <p>Salinity</p>
+        </div>
+      </div>
+      <div class="quality-gauge" id="salinityValue">
+        <div class="gauge-bar">
+          <div
+            class="gauge-fill"
+            style="width: {% if pond_data.salinity %}{{ (pond_data.salinity / 40) * 100 }}%{% else %}0%{% endif %}"
+          ></div>
+        </div>
+        <div class="gauge-info">
+          <span class="gauge-value">{{ pond_data.get('salinity', '--') }}</span>
+          <span class="gauge-range">范围: 0-40‰</span>
+        </div>
+      </div>
+      <div class="quality-status">
+        <span class="status-dot"></span>
+        正常
+      </div>
+    </div>
+
+    <!-- 氨氮 -->
+    <div class="quality-indicator">
+      <div class="quality-header">
+        <div class="quality-icon">
+          <i class="fas fa-atom"></i>
+        </div>
+        <div class="quality-name">
+          <h5>氨氮</h5>
+          <p>Ammonia Nitrogen</p>
+        </div>
+      </div>
+      <div class="quality-gauge" id="ammoniaValue">
+        <div class="gauge-bar">
+          <div
+            class="gauge-fill"
+            style="width: {% if pond_data.ammonia_nitrogen %}{{ (pond_data.ammonia_nitrogen / 1) * 100 }}%{% else %}0%{% endif %}"
+          ></div>
+        </div>
+        <div class="gauge-info">
+          <span class="gauge-value"
+            >{{ pond_data.get('ammonia_nitrogen', '--') }}</span
+          >
+          <span class="gauge-range">范围: 0-1 mg/L</span>
+        </div>
+      </div>
+      <div class="quality-status warning">
+        <span class="status-dot"></span>
+        {% if pond_data.ammonia_nitrogen and pond_data.ammonia_nitrogen > 0.5
+        %}需要关注{% else %}正常{% endif %}
+      </div>
+    </div>
+
+    <!-- 亚硝酸盐 -->
+    <div class="quality-indicator">
+      <div class="quality-header">
+        <div class="quality-icon">
+          <i class="fas fa-chemical"></i>
+        </div>
+        <div class="quality-name">
+          <h5>亚硝酸盐</h5>
+          <p>Nitrite Nitrogen</p>
+        </div>
+      </div>
+      <div class="quality-gauge" id="nitriteValue">
+        <div class="gauge-bar">
+          <div
+            class="gauge-fill"
+            style="width: {% if pond_data.nitrite_nitrogen %}{{ (pond_data.nitrite_nitrogen / 0.2) * 100 }}%{% else %}0%{% endif %}"
+          ></div>
+        </div>
+        <div class="gauge-info">
+          <span class="gauge-value"
+            >{{ pond_data.get('nitrite_nitrogen', '--') }}</span
+          >
+          <span class="gauge-range">范围: 0-0.2 mg/L</span>
+        </div>
+      </div>
+      <div class="quality-status">
+        <span class="status-dot"></span>
+        正常
+      </div>
+    </div>
+
+    <!-- 数据详细表格 -->
+    <div class="card">
+      <div class="card-header">
+        <h5><i class="fas fa-table"></i> 水质参数详细数据表</h5>
+      </div>
+      <div class="card-body">
+        <div class="table-responsive">
+          <table class="table">
+            <thead>
+              <tr>
+                <th>时间</th>
+                <th>水温 (°C)</th>
+                <th>PH值</th>
+                <th>食物值</th>
+                <th>溶解氧 (mg/L)</th>
+                <th>盐度 (‰)</th>
+                <th>氨氮 (mg/L)</th>
+                <th>亚硝酸盐 (mg/L)</th>
+                <th>操作</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>2024-03-16 10:30</td>
+                <td><span style="color: var(--primary-color)">26.3</span></td>
+                <td><span style="color: var(--primary-color)">7.8</span></td>
+                <td><span style="color: var(--primary-color)">46</span></td>
+                <td><span style="color: #00ff88">8.2</span></td>
+                <td><span style="color: var(--primary-color)">14.5</span></td>
+                <td><span style="color: #ffaa00">3.6</span></td>
+                <td><span style="color: var(--primary-color)">1.4</span></td>
+                <td><button class="btn btn-sm btn-primary">查看</button></td>
+              </tr>
+              <tr>
+                <td>2024-03-16 08:30</td>
+                <td><span style="color: var(--primary-color)">25.8</span></td>
+                <td><span style="color: var(--primary-color)">7.9</span></td>
+                <td><span style="color: var(--primary-color)">45</span></td>
+                <td><span style="color: #00ff88">8.0</span></td>
+                <td><span style="color: var(--primary-color)">14.3</span></td>
+                <td><span style="color: #ffaa00">3.8</span></td>
+                <td><span style="color: var(--primary-color)">1.5</span></td>
+                <td><button class="btn btn-sm btn-primary">查看</button></td>
+              </tr>
+              <tr>
+                <td>2024-03-16 06:30</td>
+                <td><span style="color: var(--primary-color)">25.2</span></td>
+                <td><span style="color: var(--primary-color)">7.7</span></td>
+                <td><span style="color: var(--primary-color)">47</span></td>
+                <td><span style="color: #00ff88">8.4</span></td>
+                <td><span style="color: var(--primary-color)">14.1</span></td>
+                <td><span style="color: #ffaa00">3.5</span></td>
+                <td><span style="color: var(--primary-color)">1.3</span></td>
+                <td><button class="btn btn-sm btn-primary">查看</button></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- 告警阈值设置 -->
+    <div class="card" style="margin-top: 20px">
+      <div class="card-header">
+        <h5><i class="fas fa-cog"></i> 告警阈值设置</h5>
+      </div>
+      <div class="card-body">
         <div
           style="
-            background: rgba(0, 212, 255, 0.05);
-            padding: 15px;
-            border-radius: 8px;
-            border-left: 3px solid var(--primary-color);
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
           "
         >
-          <label class="form-label">PH值告警范围</label>
-          <div style="display: flex; gap: 10px; margin-bottom: 10px">
-            <input
-              type="number"
-              class="form-control"
-              placeholder="最低值"
-              value="6.0"
-              step="0.1"
-            />
-            <input
-              type="number"
-              class="form-control"
-              placeholder="最高值"
-              value="8.5"
-              step="0.1"
-            />
+          <div
+            style="
+              background: rgba(0, 212, 255, 0.05);
+              padding: 15px;
+              border-radius: 8px;
+              border-left: 3px solid var(--primary-color);
+            "
+          >
+            <label class="form-label">水温告警范围</label>
+            <div style="display: flex; gap: 10px; margin-bottom: 10px">
+              <input
+                type="number"
+                class="form-control"
+                placeholder="最低 °C"
+                value="18"
+              />
+              <input
+                type="number"
+                class="form-control"
+                placeholder="最高 °C"
+                value="32"
+              />
+            </div>
+            <button class="btn btn-sm btn-primary">保存</button>
           </div>
-          <button class="btn btn-sm btn-primary">保存</button>
+          <div
+            style="
+              background: rgba(0, 212, 255, 0.05);
+              padding: 15px;
+              border-radius: 8px;
+              border-left: 3px solid var(--primary-color);
+            "
+          >
+            <label class="form-label">溶解氧告警阈值</label>
+            <div style="display: flex; gap: 10px; margin-bottom: 10px">
+              <input
+                type="number"
+                class="form-control"
+                placeholder="最低值 mg/L"
+                value="5"
+              />
+            </div>
+            <button class="btn btn-sm btn-primary">保存</button>
+          </div>
+          <div
+            style="
+              background: rgba(0, 212, 255, 0.05);
+              padding: 15px;
+              border-radius: 8px;
+              border-left: 3px solid var(--primary-color);
+            "
+          >
+            <label class="form-label">PH值告警范围</label>
+            <div style="display: flex; gap: 10px; margin-bottom: 10px">
+              <input
+                type="number"
+                class="form-control"
+                placeholder="最低值"
+                value="6.0"
+                step="0.1"
+              />
+              <input
+                type="number"
+                class="form-control"
+                placeholder="最高值"
+                value="8.5"
+                step="0.1"
+              />
+            </div>
+            <button class="btn btn-sm btn-primary">保存</button>
+          </div>
         </div>
       </div>
     </div>
   </div>
+  <!-- 结束 singlePondView -->
 
   {% endblock %} {% block extra_js %}
   <script>
-    let currentPondId = "{{ ponds[0].id if ponds else 0 }}";
+    let currentPondId = "all";
 
     function selectPond(element, pondId) {
       document.querySelectorAll(".pond-btn").forEach((btn) => {
@@ -627,8 +838,104 @@ endblock %} {% block extra_css %}
       element.classList.add("active");
       currentPondId = pondId;
 
-      if (pondId !== "all") {
+      if (pondId === "all") {
+        // 显示汇总视图，隐藏单鱼池视图
+        document.getElementById("singlePondView").style.display = "none";
+        document.getElementById("allPondsView").style.display = "block";
+        loadAllPondsData();
+      } else {
+        // 显示单鱼池视图，隐藏汇总视图
+        document.getElementById("singlePondView").style.display = "block";
+        document.getElementById("allPondsView").style.display = "none";
         refreshWaterQualityForPond(pondId);
+      }
+    }
+
+    // 加载所有鱼池数据
+    function loadAllPondsData() {
+      fetch("/api/water-quality/all-ponds")
+        .then((response) => response.json())
+        .then((data) => {
+          if (data.status === "success") {
+            // 更新汇总统计
+            const summary = data.summary;
+            document.getElementById("summaryTempValue").textContent =
+              summary.avg_temperature !== undefined
+                ? summary.avg_temperature
+                : "--";
+            document.getElementById("summaryPhValue").textContent =
+              summary.avg_ph_value !== undefined ? summary.avg_ph_value : "--";
+            document.getElementById("summaryOxygenValue").textContent =
+              summary.avg_dissolved_oxygen !== undefined
+                ? summary.avg_dissolved_oxygen
+                : "--";
+            document.getElementById("summaryAbnormalCount").textContent =
+              summary.abnormal_count;
+
+            // 渲染鱼池列表表格
+            renderPondsTable(data.ponds);
+
+            updateTimestamp();
+            showToast("数据已更新", "success");
+          } else {
+            showToast("数据加载失败: " + data.message, "danger");
+          }
+        })
+        .catch((error) => {
+          showToast("加载出错: " + error.message, "danger");
+        })
+        .finally(() => {
+          const btn = document.querySelector(".refresh-btn");
+          if (btn) {
+            btn.classList.remove("loading");
+          }
+        });
+    }
+
+    // 渲染鱼池列表表格
+    function renderPondsTable(ponds) {
+      const tbody = document.getElementById("pondsTableBody");
+
+      if (!ponds || ponds.length === 0) {
+        tbody.innerHTML =
+          '<tr><td colspan="9" style="text-align: center; color: var(--text-secondary);">暂无鱼池数据</td></tr>';
+        return;
+      }
+
+      tbody.innerHTML = ponds
+        .map((pond) => {
+          const statusClass = pond.status || "normal";
+          const statusText =
+            {
+              normal: "正常",
+              warning: "预警",
+              danger: "异常",
+            }[statusClass] || "未知";
+
+          return `
+          <tr onclick="switchToPond(${pond.id})">
+            <td>${pond.pond_name}</td>
+            <td>${pond.fish_type}</td>
+            <td>${pond.fish_count}</td>
+            <td><span style="color: var(--primary-color);">${pond.temperature !== null ? pond.temperature : "--"}</span></td>
+            <td><span style="color: var(--primary-color);">${pond.ph_value !== null ? pond.ph_value : "--"}</span></td>
+            <td><span style="color: var(--primary-color);">${pond.dissolved_oxygen !== null ? pond.dissolved_oxygen : "--"}</span></td>
+            <td><span class="status-badge ${statusClass}">${statusText}</span></td>
+            <td>${pond.recorded_at}</td>
+            <td><button class="btn btn-sm btn-primary pond-detail-btn" onclick="event.stopPropagation(); switchToPond(${pond.id});">查看详情</button></td>
+          </tr>
+        `;
+        })
+        .join("");
+    }
+
+    // 切换到单个鱼池的详细视图
+    function switchToPond(pondId) {
+      const btn =
+        document.querySelector(`.pond-btn[onclick*="'${pondId}'"]`) ||
+        document.querySelector(`.pond-btn`);
+      if (btn) {
+        selectPond(btn, pondId);
       }
     }
 
@@ -639,7 +946,11 @@ endblock %} {% block extra_css %}
 
       btn.classList.add("loading");
 
-      if (currentPondId && currentPondId !== "all") {
+      if (currentPondId === "all") {
+        // 在"全部鱼池"模式下刷新汇总数据
+        loadAllPondsData();
+      } else if (currentPondId && currentPondId !== "all") {
+        // 在单鱼池模式下刷新该鱼池的数据
         refreshWaterQualityForPond(currentPondId);
       } else {
         setTimeout(() => {
@@ -660,7 +971,10 @@ endblock %} {% block extra_css %}
             updateGauge("temperatureValue", wqData.temperature, 40, "℃");
 
             // 更新pH值
-            updateGauge("phValue", wqData.ph_value, 10, "");
+            updateGauge("phValue", wqData.ph_value, 14, "");
+
+            // 更新食物值
+            updateGauge("foodValue", wqData.food_value, 100, "");
 
             // 更新溶解氧
             updateGauge("oxygenValue", wqData.dissolved_oxygen, 12, "mg/L");
@@ -761,9 +1075,10 @@ endblock %} {% block extra_css %}
       }, 5000);
     }
 
-    // 页面加载时更新时间戳
+    // 页面加载时更新时间戳并加载全部鱼池数据
     document.addEventListener("DOMContentLoaded", function () {
       updateTimestamp();
+      loadAllPondsData();
     });
 
     // 定时更新时间戳
